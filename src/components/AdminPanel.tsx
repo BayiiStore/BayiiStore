@@ -24,7 +24,8 @@ import {
   DollarSign,
   Award,
   Clock,
-  UserCheck
+  UserCheck,
+  Copy
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -105,6 +106,8 @@ export default function AdminPanel() {
   const [autoCount, setAutoCount] = useState<number>(5);
   const [autoSelectedProductId, setAutoSelectedProductId] = useState("");
   const [autoSuccessMsg, setAutoSuccessMsg] = useState("");
+  const [newlyGeneratedCodes, setNewlyGeneratedCodes] = useState<string[]>([]);
+  const [autoCopied, setAutoCopied] = useState(false);
 
   // Form states - Notifications
   const [notifTitle, setNotifTitle] = useState("");
@@ -704,11 +707,13 @@ export default function AdminPanel() {
       const prefix = autoPrefix.trim().toUpperCase();
       const batch = writeBatch(db);
       const codesColRef = collection(db, "stock_codes");
+      const generated: string[] = [];
 
       for (let i = 0; i < autoCount; i++) {
         const num1 = Math.floor(1000 + Math.random() * 9000); // exactly 4-digit number
         const num2 = Math.floor(1000 + Math.random() * 9000); // exactly 4-digit number
         const generatedCode = `${prefix}-${num1}-${num2}`;
+        generated.push(generatedCode);
 
         const cRef = doc(codesColRef);
         batch.set(cRef, {
@@ -720,9 +725,10 @@ export default function AdminPanel() {
       }
 
       await batch.commit();
+      setNewlyGeneratedCodes(generated);
+      setAutoCopied(false);
       setAutoSuccessMsg(`${autoCount} adet otomatik stok kodu ("${prefix}-XXXX-XXXX") başarıyla oluşturuldu ve yüklendi!`);
       setAutoPrefix("");
-      setTimeout(() => setAutoSuccessMsg(""), 5000);
     } catch (err) {
       console.error(err);
       alert("Otomatik kodlar üretilirken hata oluştu.");
@@ -1705,6 +1711,85 @@ export default function AdminPanel() {
                   >
                     Rastgele Kodları Üret ve Sisteme Yükle
                   </button>
+
+                  {newlyGeneratedCodes.length > 0 && (
+                    <div id="newly-generated-codes-panel" className="mt-4 p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/20 border border-indigo-150 dark:border-indigo-900/40 space-y-3 text-left">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-sans font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                          🔑 Yeni Üretilen Kodlar ({newlyGeneratedCodes.length} Adet)
+                        </span>
+                        <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono">
+                          Ayırt Etmesi Kolay
+                        </span>
+                      </div>
+
+                      {/* Scrollable List */}
+                      <div className="max-h-48 overflow-y-auto bg-white dark:bg-zinc-900/80 rounded-xl p-3 border border-zinc-200 dark:border-zinc-800 space-y-1.5 scrollbar-thin">
+                        {newlyGeneratedCodes.map((code, index) => (
+                          <div key={index} className="flex items-center justify-between gap-2 py-1 border-b border-zinc-50 dark:border-zinc-850/40 last:border-0 font-mono text-xs select-all text-zinc-800 dark:text-zinc-200">
+                            <span>{code}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(code);
+                              }}
+                              className="text-[10px] text-indigo-500 hover:text-indigo-600 font-sans cursor-pointer flex items-center gap-1 bg-zinc-50 dark:bg-zinc-850 px-1.5 py-0.5 rounded border border-zinc-200 dark:border-zinc-700/80"
+                              title="Tek Kodu Kopyala"
+                            >
+                              <Copy className="w-2.5 h-2.5" /> Kopyala
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Copy All and Close Controls */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(newlyGeneratedCodes.join("\n"));
+                            setAutoCopied(true);
+                          }}
+                          className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition duration-150 flex items-center justify-center gap-2 cursor-pointer ${
+                            autoCopied
+                              ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/10"
+                              : "bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-500/10"
+                          }`}
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          {autoCopied ? "✓ Hepsi Kopyalandı!" : "📋 Tümünü Tek Tıkla Kopyala"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNewlyGeneratedCodes([]);
+                            setAutoCopied(false);
+                            setAutoSuccessMsg("");
+                          }}
+                          className={`w-full py-2.5 px-4 rounded-xl text-xs font-bold transition border cursor-pointer ${
+                            autoCopied
+                              ? "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-750 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                              : "bg-zinc-100 dark:bg-zinc-800/40 border-transparent text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
+                          }`}
+                          disabled={!autoCopied}
+                          title={!autoCopied ? "Lütfen önce tüm kodları kopyalayın!" : "Listeyi temizle"}
+                        >
+                          Listeyi Temizle / Kapat
+                        </button>
+                      </div>
+
+                      {!autoCopied ? (
+                        <p className="text-[10px] text-amber-500 dark:text-amber-400/80 font-sans text-center">
+                          ⚠️ Kodların karışmaması için "Tümünü Tek Tıkla Kopyala" butonuna tıklamadan bu panel kapatılamaz!
+                        </p>
+                      ) : (
+                        <p className="text-[10px] text-emerald-500 dark:text-emerald-400 font-sans text-center">
+                          ✓ Kodları başarıyla kopyaladınız. Artık paneli temizleyebilir veya yeni kod üretebilirsiniz.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </form>
               </div>
 
