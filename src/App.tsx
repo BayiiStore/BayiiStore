@@ -10,6 +10,7 @@ import AdminPanel from "./components/AdminPanel";
 import SupportForm from "./components/SupportForm";
 import SupportBanner from "./components/SupportBanner";
 import AiAssistant from "./components/AiAssistant";
+import FaqSection from "./components/FaqSection";
 import { Claim } from "./types";
 import { ShieldCheck, KeyRound, ArrowRight, Download, Play, FileText, Sparkles, Clock, LockKeyhole, Laptop, ExternalLink, HelpCircle, Copy, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -22,6 +23,7 @@ export default function App() {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
   const [userRole, setUserRole] = useState<'admin' | 'user'>('user');
+  const [userProfile, setUserProfile] = useState<any>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   const handleCopyCode = (code: string) => {
@@ -42,18 +44,26 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        // Fetch user role
+        // Fetch user role and profile
         try {
           const docSnap = await getDoc(doc(db, "users", currentUser.uid));
-          if (docSnap.exists() && docSnap.data().role === 'admin') {
-            setUserRole('admin');
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setUserProfile(data);
+            if (data.role === 'admin') {
+              setUserRole('admin');
+            } else {
+              setUserRole('user');
+            }
           } else {
+            setUserProfile(null);
             setUserRole('user');
           }
         } catch (err) {
-          console.error("Error fetching role", err);
+          console.error("Error fetching role/profile", err);
         }
       } else {
+        setUserProfile(null);
         setUserRole('user');
       }
       setIsAuthLoading(false);
@@ -254,6 +264,40 @@ export default function App() {
                       </div>
                     </div>
 
+                    {user && (
+                      <div className="mb-4 p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-150 dark:border-zinc-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-md flex-shrink-0">
+                            {userProfile?.bankFullName ? userProfile.bankFullName.charAt(0).toUpperCase() : (user.email ? user.email.charAt(0).toUpperCase() : "?")}
+                          </div>
+                          <div>
+                            <p className="text-xs font-sans font-black text-zinc-800 dark:text-white leading-tight">
+                              {userProfile?.bankFullName || "Kullanıcı"}
+                            </p>
+                            <p className="text-[10px] text-zinc-400 font-mono leading-none mt-1">
+                              {user.email}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {(() => {
+                            let badge = { text: "Yeni Üye 🌱", class: "bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500" };
+                            if (userClaims.length >= 5) badge = { text: "Seçkin Elmas Üye 💎", class: "bg-indigo-500/10 border-indigo-500/30 text-indigo-400 font-extrabold animate-pulse" };
+                            else if (userClaims.length >= 3) badge = { text: "Altın Üye 🥇", class: "bg-amber-500/10 border-amber-500/30 text-amber-400 font-bold" };
+                            else if (userClaims.length >= 1) badge = { text: "Gümüş Üye 🥈", class: "bg-slate-400/10 border-slate-400/30 text-slate-400 font-bold" };
+                            return (
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] rounded-full border ${badge.class} uppercase tracking-wider`}>
+                                {badge.text}
+                              </span>
+                            );
+                          })()}
+                          <span className="px-2.5 py-1 text-[10px] bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-150 dark:border-indigo-900 text-indigo-600 dark:text-indigo-400 font-sans font-black rounded-full uppercase tracking-wider">
+                            {userClaims.length} TESLİMAT
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
                     {!user ? (
                       <div className="text-center py-8">
                         <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-4">
@@ -364,6 +408,9 @@ export default function App() {
                   currentUserEmail={activeUserEmail}
                 />
               </div>
+
+              {/* Sıkça Sorulan Sorular */}
+              <FaqSection />
 
               {/* Customer Support Request Form */}
               <SupportForm />

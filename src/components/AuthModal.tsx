@@ -86,6 +86,9 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
       console.error(err);
       if (err.code === 'auth/operation-not-allowed') {
         setError('Google ile giriş henüz Firebase Console üzerinden aktif edilmemiş. Lütfen Firebase Console -> Authentication -> Sign-in method sekmesinden Google seçeneğini etkinleştirin.');
+      } else if (err.code === 'auth/unauthorized-domain') {
+        const currentDomain = window.location.hostname;
+        setError(`Bu alan adı (${currentDomain}) Firebase projenizde yetkilendirilmemiş. Lütfen Firebase Console -> Authentication -> Settings (Ayarlar) -> Authorized domains (Yetkilendirilmiş alan adları) kısmına giderek "${currentDomain}" alan adını ekleyin.`);
       } else {
         setError(err.message || 'Google ile giriş yapılırken bir hata oluştu.');
       }

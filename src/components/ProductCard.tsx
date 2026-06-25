@@ -27,6 +27,52 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
   const [paymentMethod, setPaymentMethod] = useState<"papara" | "iban">("papara");
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
+  // Coupon promo states
+  const [couponInput, setCouponInput] = useState("");
+  const [appliedCoupon, setAppliedCoupon] = useState<any | null>(null);
+  const [isCheckingCoupon, setIsCheckingCoupon] = useState(false);
+  const [couponError, setCouponError] = useState("");
+  const [couponSuccess, setCouponSuccess] = useState("");
+
+  const handleApplyCoupon = async () => {
+    if (!couponInput.trim()) return;
+    setIsCheckingCoupon(true);
+    setCouponError("");
+    setCouponSuccess("");
+    try {
+      const q = query(
+        collection(db, "coupons"),
+        where("code", "==", couponInput.trim().toUpperCase()),
+        where("active", "==", true)
+      );
+      const querySnap = await getDocs(q);
+      if (querySnap.empty) {
+        setCouponError("Geçersiz veya süresi dolmuş kupon kodu.");
+        setAppliedCoupon(null);
+      } else {
+        const couponDoc = querySnap.docs[0];
+        const couponData = couponDoc.data();
+        setAppliedCoupon({ id: couponDoc.id, ...couponData });
+        setCouponSuccess(`"${couponData.code}" kuponu başarıyla uygulandı!`);
+      }
+    } catch (err) {
+      console.error("Coupon error:", err);
+      setCouponError("Kupon kontrol edilirken hata oluştu.");
+    } finally {
+      setIsCheckingCoupon(false);
+    }
+  };
+
+  const getFinalPrice = () => {
+    if (!appliedCoupon) return product.price;
+    if (appliedCoupon.discountType === "percent") {
+      const discount = (product.price * appliedCoupon.discountValue) / 100;
+      return Math.max(0, product.price - discount);
+    } else {
+      return Math.max(0, product.price - appliedCoupon.discountValue);
+    }
+  };
+
   const [receiptImage, setReceiptImage] = useState<string | null>(null);
   const [receiptMime, setReceiptMime] = useState<string>("");
   const [receiptFileName, setReceiptFileName] = useState<string>("");
@@ -66,13 +112,14 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
     setPaparaStep("verifying");
 
     try {
+      const finalPrice = getFinalPrice();
       const response = await fetch("/api/gemini/verify-dekont", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           image: receiptImage,
           mimeType: receiptMime,
-          expectedPrice: product.price,
+          expectedPrice: finalPrice,
           customerName: customerName
         })
       });
@@ -91,7 +138,10 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
           status: 'approved',
           stockCode: "PAPARA-" + customerName.toUpperCase().replace(/\s+/g, "_") + "-" + Math.floor(1000 + Math.random() * 9000),
           claimedAt: Date.now(),
-          deliveryContent: product.deliveryContent
+          deliveryContent: product.deliveryContent,
+          originalPrice: product.price,
+          paidPrice: finalPrice,
+          couponCode: appliedCoupon ? appliedCoupon.code : null
         };
 
         await addDoc(collection(db, "claims"), claimPayload);
@@ -126,6 +176,7 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
     // Simulate payment verification delay of 3 seconds
     setTimeout(async () => {
       try {
+        const finalPrice = getFinalPrice();
         const claimId = "claim-" + Date.now();
         const claimPayload = {
           id: claimId,
@@ -138,7 +189,10 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
           status: 'pending',
           stockCode: "MANUAL_PENDING",
           claimedAt: Date.now(),
-          deliveryContent: product.deliveryContent
+          deliveryContent: product.deliveryContent,
+          originalPrice: product.price,
+          paidPrice: finalPrice,
+          couponCode: appliedCoupon ? appliedCoupon.code : null
         };
         
         await addDoc(collection(db, "claims"), claimPayload);
@@ -547,9 +601,67 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
                             </div>
                           )}
 
+                          {/* Coupon Code Section */}
+                          <div className="bg-zinc-100/50 dark:bg-zinc-900/60 p-3.5 rounded-2xl border border-zinc-150 dark:border-zinc-800/85 space-y-2.5">
+                            <span className="text-[9px] text-zinc-400 dark:text-zinc-500 font-extrabold tracking-widest uppercase block">
+                              PROMOSYON / KUPON KODU
+                            </span>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={couponInput}
+                                onChange={(e) => setCouponInput(e.target.value)}
+                                placeholder="ÖRN: INDIRIM20"
+                                className="flex-grow bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-800 dark:text-white placeholder-zinc-400 outline-none focus:ring-1 focus:ring-indigo-500 font-mono uppercase"
+                                disabled={!!appliedCoupon}
+                              />
+                              {appliedCoupon ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setAppliedCoupon(null);
+                                    setCouponInput("");
+                                    setCouponSuccess("");
+                                    setCouponError("");
+                                  }}
+                                  className="px-3 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 rounded-xl text-xs font-bold transition cursor-pointer"
+                                >
+                                  Kaldır
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={handleApplyCoupon}
+                                  disabled={isCheckingCoupon || !couponInput.trim()}
+                                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white font-sans font-bold rounded-xl text-xs transition cursor-pointer flex items-center gap-1.5"
+                                >
+                                  {isCheckingCoupon ? <Loader2 className="w-3 h-3 animate-spin" /> : "Uygula"}
+                                </button>
+                              )}
+                            </div>
+                            {couponError && (
+                              <p className="text-[10px] text-rose-500 font-medium font-sans">
+                                ⚠️ {couponError}
+                              </p>
+                            )}
+                            {couponSuccess && (
+                              <p className="text-[10px] text-emerald-500 font-bold font-sans">
+                                ✓ {couponSuccess}
+                              </p>
+                            )}
+                          </div>
+
                           <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200/40 dark:border-amber-900/30 p-3.5 rounded-2xl">
                             <p className="text-[11px] text-amber-700 dark:text-amber-400 leading-normal font-medium">
-                              Lütfen seçtiğiniz hesaba tam olarak <strong className="font-mono font-bold text-zinc-800 dark:text-zinc-200">{product.price.toFixed(2)} TL</strong> transfer edin. Ardından aşağıdaki **Yapay Zeka ile Doğrula** kısmından dekontu yükleyebilir veya manuel onaya gönderebilirsiniz.
+                              {appliedCoupon ? (
+                                <>
+                                  Lütfen seçtiğiniz hesaba kuponlu indirimli fiyat olan <strong className="font-mono font-black text-emerald-500 dark:text-emerald-400">{getFinalPrice().toFixed(2)} TL</strong> <span className="line-through text-zinc-400 dark:text-zinc-500 font-normal">({product.price.toFixed(2)} TL)</span> transfer edin. Ardından dekontu yükleyin.
+                                </>
+                              ) : (
+                                <>
+                                  Lütfen seçtiğiniz hesaba tam olarak <strong className="font-mono font-bold text-zinc-800 dark:text-zinc-200">{product.price.toFixed(2)} TL</strong> transfer edin. Ardından aşağıdaki **Yapay Zeka ile Doğrula** kısmından dekontu yükleyebilir veya manuel onaya gönderebilirsiniz.
+                                </>
+                              )}
                             </p>
                           </div>
 

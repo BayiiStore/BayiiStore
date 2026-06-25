@@ -92,3 +92,13 @@ export interface SupportRequest {
   createdAt: number;
   status: 'bekliyor' | 'cozuldu';
 }
+
+export interface Coupon {
+  id: string;
+  code: string;
+  discountType: 'percent' | 'flat';
+  discountValue: number;
+  active: boolean;
+  createdAt: number;
+}
+

@@ -50,7 +50,7 @@ export default function AdminPanel() {
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
 
-  const [activeTab, setActiveTab] = useState<"dashboard" | "products" | "codes" | "notifications" | "claims" | "comments" | "support" | "users">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "products" | "codes" | "notifications" | "claims" | "comments" | "support" | "users" | "coupons">("dashboard");
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
 
   // Collections state
@@ -61,6 +61,13 @@ export default function AdminPanel() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [supportRequests, setSupportRequests] = useState<SupportRequest[]>([]);
   const [usersList, setUsersList] = useState<any[]>([]); // Any type since we didn't export UserProfile
+  const [coupons, setCoupons] = useState<any[]>([]);
+
+  // Form states - Coupons
+  const [cCode, setCCode] = useState("");
+  const [cType, setCType] = useState<"percent" | "flat">("percent");
+  const [cValue, setCValue] = useState("");
+  const [couponSuccessMsg, setCouponSuccessMsg] = useState("");
 
   // Form states - Products
   const [pName, setPName] = useState("");
@@ -162,6 +169,13 @@ export default function AdminPanel() {
       setUsersList(list);
     });
 
+    // Stream Coupons
+    const unsubCoupons = onSnapshot(query(collection(db, "coupons"), orderBy("createdAt", "desc")), (snap) => {
+      const list: any[] = [];
+      snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
+      setCoupons(list);
+    });
+
     // Stream Settings
     const unsubSettings = onSnapshot(doc(db, "settings", "global"), (snap) => {
       if (snap.exists()) {
@@ -177,6 +191,7 @@ export default function AdminPanel() {
       unsubCats();
       unsubSupport();
       unsubUsers();
+      unsubCoupons();
       unsubSettings();
     };
   }, [isAdmin]);
@@ -267,6 +282,44 @@ export default function AdminPanel() {
       await batch.commit();
     } catch (err) {
       console.error("Error deleting support request:", err);
+    }
+  };
+
+  const handleCreateCoupon = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cCode.trim() || !cValue) return;
+    try {
+      const payload = {
+        code: cCode.trim().toUpperCase(),
+        discountType: cType,
+        discountValue: parseFloat(cValue),
+        active: true,
+        createdAt: Date.now()
+      };
+      await addDoc(collection(db, "coupons"), payload);
+      setCCode("");
+      setCValue("");
+      setCouponSuccessMsg("Kupon başarıyla oluşturuldu!");
+      setTimeout(() => setCouponSuccessMsg(""), 3000);
+    } catch (err) {
+      console.error("Error creating coupon", err);
+    }
+  };
+
+  const toggleCouponActive = async (docId: string, currentStatus: boolean) => {
+    try {
+      await updateDoc(doc(db, "coupons", docId), { active: !currentStatus });
+    } catch (err) {
+      console.error("Error updating coupon status", err);
+    }
+  };
+
+  const handleDeleteCoupon = async (docId: string) => {
+    if (!confirm("Bu kuponu tamamen silmek istediğinize emin misiniz?")) return;
+    try {
+      await deleteDoc(doc(db, "coupons", docId));
+    } catch (err) {
+      console.error("Error deleting coupon", err);
     }
   };
 
@@ -827,6 +880,19 @@ export default function AdminPanel() {
         >
           <UserCheck className="w-4 h-4" />
           Kayıtlı Müşteriler
+        </button>
+
+        <button
+          id="tab-coupons"
+          onClick={() => setActiveTab("coupons")}
+          className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+            activeTab === "coupons"
+              ? "bg-indigo-600 text-white shadow-md shadow-indigo-500/10"
+              : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/50 dark:hover:bg-zinc-900"
+          }`}
+        >
+          <Award className="w-4 h-4" />
+          Kupon & İndirim Yönetimi
         </button>
 
         <button
@@ -1662,13 +1728,14 @@ export default function AdminPanel() {
                       <th className="px-4 py-3 font-bold uppercase tracking-wider">Müşteri (Banka İsim)</th>
                       <th className="px-4 py-3 font-bold uppercase tracking-wider">Ürün</th>
                       <th className="px-4 py-3 font-bold uppercase tracking-wider">Kod / Durum</th>
+                      <th className="px-4 py-3 font-bold uppercase tracking-wider">Ödeme / Kupon</th>
                       <th className="px-4 py-3 font-bold uppercase tracking-wider">Dekont Görseli</th>
                       <th className="px-4 py-3 font-bold uppercase tracking-wider">Tarih</th>
                       <th className="px-4 py-3 font-bold uppercase tracking-wider text-right">İşlem</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 text-zinc-700 dark:text-zinc-300">
-                    {claims.map((c) => (
+                    {claims.map((c: any) => (
                       <tr id={`admin-row-claim-${c.id}`} key={c.id}>
                         <td className="px-4 py-3">
                           <p className="font-bold text-zinc-800 dark:text-white">{c.customerName || "Bilinmeyen"}</p>
@@ -1680,6 +1747,20 @@ export default function AdminPanel() {
                             <span className="px-2 py-0.5 bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 rounded-md text-[10px]">Onay Bekliyor</span>
                           ) : (
                             c.stockCode
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {c.paidPrice !== undefined ? (
+                            <div className="space-y-0.5">
+                              <p className="font-bold text-zinc-800 dark:text-white font-mono">{c.paidPrice.toFixed(2)} TL</p>
+                              {c.couponCode && (
+                                <span className="px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded text-[9px] font-mono font-black uppercase">
+                                  KUPON: {c.couponCode}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-zinc-400 font-mono italic">-</span>
                           )}
                         </td>
                         <td className="px-4 py-3">
@@ -1929,6 +2010,160 @@ export default function AdminPanel() {
                   ))}
                 </div>
               )}
+            </motion.div>
+          )}
+
+          {/* TAB 9: Coupon & Discount Management */}
+          {activeTab === "coupons" && (
+            <motion.div
+              id="admin-tab-coupons"
+              key="tab-coupons-content"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-8"
+            >
+              <div>
+                <h3 className="font-sans font-black text-lg text-zinc-800 dark:text-white">Kupon & İndirim Yönetimi</h3>
+                <p className="text-xs text-zinc-400 dark:text-zinc-500">Müşterilerinize sunacağınız indirim kodlarını ve kampanyalarını buradan yönetebilirsiniz.</p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                {/* Create Coupon Column */}
+                <div className="lg:col-span-4 bg-zinc-50 dark:bg-zinc-950/40 p-6 rounded-3xl border border-zinc-150 dark:border-zinc-850/80 h-fit space-y-4">
+                  <h4 className="font-sans font-bold text-sm text-zinc-800 dark:text-white">Yeni Kupon Oluştur</h4>
+                  <form onSubmit={handleCreateCoupon} className="space-y-4">
+                    <div>
+                      <label className="text-[10px] font-bold tracking-wider text-zinc-400 dark:text-zinc-500 uppercase block mb-1">KUPON KODU</label>
+                      <input
+                        type="text"
+                        required
+                        value={cCode}
+                        onChange={(e) => setCCode(e.target.value)}
+                        placeholder="ÖRN: INDIRIM20"
+                        className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-750 rounded-xl px-4 py-2.5 text-xs text-zinc-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 font-mono uppercase"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold tracking-wider text-zinc-400 dark:text-zinc-500 uppercase block mb-1">İNDİRİM TÜRÜ</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCType("percent")}
+                          className={`py-2 px-3 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                            cType === "percent"
+                              ? "bg-indigo-600 border-indigo-600 text-white"
+                              : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-750 text-zinc-700 dark:text-zinc-300"
+                          }`}
+                        >
+                          Yüzdesel (%)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCType("flat")}
+                          className={`py-2 px-3 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                            cType === "flat"
+                              ? "bg-indigo-600 border-indigo-600 text-white"
+                              : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-750 text-zinc-700 dark:text-zinc-300"
+                          }`}
+                        >
+                          Net Tutar (TL)
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-[10px] font-bold tracking-wider text-zinc-400 dark:text-zinc-500 uppercase block mb-1">İNDİRİM DEĞERİ</label>
+                      <input
+                        type="number"
+                        required
+                        min="1"
+                        value={cValue}
+                        onChange={(e) => setCValue(e.target.value)}
+                        placeholder={cType === "percent" ? "Örn: 20 (%20 İndirim)" : "Örn: 50 (50 TL İndirim)"}
+                        className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 border-zinc-300 dark:border-zinc-750 rounded-xl px-4 py-2.5 text-xs text-zinc-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 font-mono"
+                      />
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-sans font-bold py-2.5 px-4 rounded-xl transition text-xs cursor-pointer shadow-md shadow-indigo-500/10"
+                    >
+                      Kuponu Yayınla
+                    </button>
+                  </form>
+
+                  {couponSuccessMsg && (
+                    <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-150 dark:border-emerald-900/40 rounded-xl text-emerald-600 dark:text-emerald-400 text-xs font-bold">
+                      ✓ {couponSuccessMsg}
+                    </div>
+                  )}
+                </div>
+
+                {/* Coupons List Column */}
+                <div className="lg:col-span-8 space-y-4">
+                  <h4 className="font-sans font-bold text-sm text-zinc-800 dark:text-white">Yayındaki Kuponlar ({coupons.length})</h4>
+                  {coupons.length === 0 ? (
+                    <div className="bg-zinc-50 dark:bg-zinc-950/20 border border-dashed border-zinc-200 dark:border-zinc-800 rounded-3xl py-12 text-center text-zinc-400 dark:text-zinc-500 text-xs">
+                      Henüz hiç kupon oluşturulmamış. Sol taraftan ilk kuponunuzu oluşturabilirsiniz.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {coupons.map((coupon) => (
+                        <div
+                          key={coupon.id}
+                          className={`p-4 rounded-3xl border transition ${
+                            coupon.active
+                              ? "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 shadow-sm"
+                              : "bg-zinc-50 dark:bg-zinc-950/30 border-zinc-200 dark:border-zinc-800/80 opacity-60"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <span className="font-mono font-black text-sm text-indigo-600 dark:text-indigo-400 tracking-wide uppercase bg-indigo-50 dark:bg-indigo-950/30 px-2.5 py-1 rounded-lg">
+                              {coupon.code}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => toggleCouponActive(coupon.id, coupon.active)}
+                                className={`p-1.5 rounded-lg transition cursor-pointer ${
+                                  coupon.active
+                                    ? "text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20"
+                                    : "text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                                }`}
+                                title={coupon.active ? "Pasifleştir" : "Aktifleştir"}
+                              >
+                                {coupon.active ? <ToggleRight className="w-5 h-5" /> : <ToggleLeft className="w-5 h-5" />}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteCoupon(coupon.id)}
+                                className="p-1.5 hover:bg-rose-50 dark:hover:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-lg transition cursor-pointer"
+                                title="Kuponu Sil"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between text-xs mt-3 border-t border-zinc-100 dark:border-zinc-800/60 pt-2 text-zinc-500 dark:text-zinc-400">
+                            <span className="font-sans font-semibold">
+                              İndirim:{" "}
+                              <strong className="text-zinc-800 dark:text-white font-mono">
+                                {coupon.discountType === "percent" ? `%${coupon.discountValue}` : `${coupon.discountValue} TL`}
+                              </strong>
+                            </span>
+                            <span className="text-[10px] text-zinc-400">
+                              {new Date(coupon.createdAt).toLocaleDateString("tr-TR")}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
             </motion.div>
           )}
 
