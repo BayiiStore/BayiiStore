@@ -100,6 +100,12 @@ export default function AdminPanel() {
   const [rawCodes, setRawCodes] = useState(""); // Comma separated codes
   const [codesSuccessMsg, setCodesSuccessMsg] = useState("");
 
+  // Form states - Automatic Stock Code Generator
+  const [autoPrefix, setAutoPrefix] = useState("");
+  const [autoCount, setAutoCount] = useState<number>(5);
+  const [autoSelectedProductId, setAutoSelectedProductId] = useState("");
+  const [autoSuccessMsg, setAutoSuccessMsg] = useState("");
+
   // Form states - Notifications
   const [notifTitle, setNotifTitle] = useState("");
   const [notifMessage, setNotifMessage] = useState("");
@@ -122,8 +128,9 @@ export default function AdminPanel() {
         } as Product);
       });
       setProducts(list);
-      if (list.length > 0 && !selectedProductId) {
-        setSelectedProductId(list[0].id);
+      if (list.length > 0) {
+        if (!selectedProductId) setSelectedProductId(list[0].id);
+        if (!autoSelectedProductId) setAutoSelectedProductId(list[0].id);
       }
     });
 
@@ -684,6 +691,41 @@ export default function AdminPanel() {
     } catch (err) {
       console.error(err);
       alert("Kodlar eklenirken hata oluştu.");
+    }
+  };
+
+  // Generate Automatic Stock Codes
+  const handleGenerateAutoCodes = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAutoSuccessMsg("");
+    if (!autoSelectedProductId || !autoPrefix.trim() || autoCount <= 0) return;
+
+    try {
+      const prefix = autoPrefix.trim().toUpperCase();
+      const batch = writeBatch(db);
+      const codesColRef = collection(db, "stock_codes");
+
+      for (let i = 0; i < autoCount; i++) {
+        const num1 = Math.floor(1000 + Math.random() * 9000); // exactly 4-digit number
+        const num2 = Math.floor(1000 + Math.random() * 9000); // exactly 4-digit number
+        const generatedCode = `${prefix}-${num1}-${num2}`;
+
+        const cRef = doc(codesColRef);
+        batch.set(cRef, {
+          id: cRef.id,
+          code: generatedCode,
+          productId: autoSelectedProductId,
+          used: false
+        });
+      }
+
+      await batch.commit();
+      setAutoSuccessMsg(`${autoCount} adet otomatik stok kodu ("${prefix}-XXXX-XXXX") başarıyla oluşturuldu ve yüklendi!`);
+      setAutoPrefix("");
+      setTimeout(() => setAutoSuccessMsg(""), 5000);
+    } catch (err) {
+      console.error(err);
+      alert("Otomatik kodlar üretilirken hata oluştu.");
     }
   };
 
@@ -1557,47 +1599,114 @@ export default function AdminPanel() {
                 <p className="text-xs text-zinc-400 dark:text-zinc-500">Müşterilerin ItemSatış'tan aldıktan sonra sitemizde doğrulayabileceği stok kodlarını buraya girin.</p>
               </div>
 
-              <form id="add-stock-codes-form" onSubmit={handleAddStockCodes} className="bg-zinc-50 dark:bg-zinc-950/40 p-6 rounded-3xl border border-zinc-150 dark:border-zinc-800/80 space-y-4 max-w-xl">
-                <div>
-                  <label className="text-[10px] font-bold tracking-wider text-zinc-400 uppercase block mb-1">STOK KODU HANGİ ÜRÜNE BAĞLANACAK?</label>
-                  <select
-                    id="code-product-select"
-                    value={selectedProductId}
-                    onChange={(e) => setSelectedProductId(e.target.value)}
-                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-2.5 text-xs text-zinc-800 dark:text-white outline-none"
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Sol Taraf: Manuel Stok Kodu Yükleme */}
+                <form id="add-stock-codes-form" onSubmit={handleAddStockCodes} className="bg-zinc-50 dark:bg-zinc-950/40 p-6 rounded-3xl border border-zinc-150 dark:border-zinc-800/80 space-y-4">
+                  <h4 className="font-sans font-bold text-sm text-zinc-800 dark:text-white pb-2 border-b border-zinc-100 dark:border-zinc-800/50 flex items-center gap-2">
+                    <span className="p-1.5 bg-zinc-100 dark:bg-zinc-900 rounded-lg text-xs">✍️</span> Manuel Stok Kodu Yükle
+                  </h4>
+
+                  <div>
+                    <label className="text-[10px] font-bold tracking-wider text-zinc-400 uppercase block mb-1">STOK KODU HANGİ ÜRÜNE BAĞLANACAK?</label>
+                    <select
+                      id="code-product-select"
+                      value={selectedProductId}
+                      onChange={(e) => setSelectedProductId(e.target.value)}
+                      className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-2.5 text-xs text-zinc-800 dark:text-white outline-none"
+                    >
+                      {products.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold tracking-wider text-zinc-400 uppercase block mb-1">STOK KODLARI (VİRGÜLLE AYIRIN)</label>
+                    <textarea
+                      id="raw-codes-textarea"
+                      required
+                      rows={4}
+                      value={rawCodes}
+                      onChange={(e) => setRawCodes(e.target.value)}
+                      placeholder="Örn: STOK-KGB-100, STOK-KGB-101, STOK-KGB-102"
+                      className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl p-3 text-xs text-zinc-800 dark:text-white placeholder-zinc-400 outline-none font-mono resize-none"
+                    />
+                    <p className="text-[10px] text-zinc-400 mt-1">İstediğiniz kadar kodu virgülle ayırarak tek seferde yükleyebilirsiniz.</p>
+                  </div>
+
+                  {codesSuccessMsg && (
+                    <p className="text-xs text-emerald-500 font-bold">{codesSuccessMsg}</p>
+                  )}
+
+                  <button
+                    id="submit-stock-codes-btn"
+                    type="submit"
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-sans font-bold text-xs px-5 py-2.5 rounded-xl transition duration-150 cursor-pointer shadow-md"
                   >
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                </div>
+                    Kodları Sisteme Yükle
+                  </button>
+                </form>
 
-                <div>
-                  <label className="text-[10px] font-bold tracking-wider text-zinc-400 uppercase block mb-1">STOK KODLARI (VİRGÜLLE AYIRIN)</label>
-                  <textarea
-                    id="raw-codes-textarea"
-                    required
-                    rows={4}
-                    value={rawCodes}
-                    onChange={(e) => setRawCodes(e.target.value)}
-                    placeholder="Örn: STOK-KGB-100, STOK-KGB-101, STOK-KGB-102"
-                    className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl p-3 text-xs text-zinc-800 dark:text-white placeholder-zinc-400 outline-none font-mono resize-none"
-                  />
-                  <p className="text-[10px] text-zinc-400 mt-1">İstediğiniz kadar kodu virgülle ayırarak tek seferde yükleyebilirsiniz.</p>
-                </div>
+                {/* Sağ Taraf: Otomatik Stok Kodu Üretici */}
+                <form id="auto-generate-stock-codes-form" onSubmit={handleGenerateAutoCodes} className="bg-zinc-50 dark:bg-zinc-950/40 p-6 rounded-3xl border border-zinc-150 dark:border-zinc-800/80 space-y-4">
+                  <h4 className="font-sans font-bold text-sm text-zinc-800 dark:text-white pb-2 border-b border-zinc-100 dark:border-zinc-800/50 flex items-center gap-2">
+                    <span className="p-1.5 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-500 rounded-lg text-xs">⚡</span> Otomatik Stok Kodu Üretici
+                  </h4>
 
-                {codesSuccessMsg && (
-                  <p className="text-xs text-emerald-500 font-bold">{codesSuccessMsg}</p>
-                )}
+                  <div>
+                    <label className="text-[10px] font-bold tracking-wider text-zinc-400 uppercase block mb-1">STOK KODU HANGİ ÜRÜNE BAĞLANACAK?</label>
+                    <select
+                      id="auto-code-product-select"
+                      value={autoSelectedProductId}
+                      onChange={(e) => setAutoSelectedProductId(e.target.value)}
+                      className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-2.5 text-xs text-zinc-800 dark:text-white outline-none"
+                    >
+                      {products.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
 
-                <button
-                  id="submit-stock-codes-btn"
-                  type="submit"
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-sans font-bold text-xs px-5 py-2.5 rounded-xl transition duration-150 cursor-pointer shadow-md"
-                >
-                  Kodları Sisteme Yükle
-                </button>
-              </form>
+                  <div>
+                    <label className="text-[10px] font-bold tracking-wider text-zinc-400 uppercase block mb-1">STOK ADI (PREFIX)</label>
+                    <input
+                      type="text"
+                      required
+                      value={autoPrefix}
+                      onChange={(e) => setAutoPrefix(e.target.value)}
+                      placeholder="Örn: OPENCODE veya CLAUDE-TAKIM"
+                      className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-2.5 text-xs text-zinc-800 dark:text-white outline-none font-mono uppercase"
+                    />
+                    <p className="text-[10px] text-zinc-400 mt-1">Kodun başlangıcındaki yazı. (Örn: OPENCODE girerseniz OPENCODE-1234-5678 üretilir.)</p>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold tracking-wider text-zinc-400 uppercase block mb-1">KAÇ ADET STOK ÜRETİLSİN?</label>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      max={100}
+                      value={autoCount}
+                      onChange={(e) => setAutoCount(parseInt(e.target.value) || 1)}
+                      className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-2.5 text-xs text-zinc-800 dark:text-white outline-none font-mono"
+                    />
+                    <p className="text-[10px] text-zinc-400 mt-1">Tek seferde maksimum 100 adet stok kodu üretebilirsiniz.</p>
+                  </div>
+
+                  {autoSuccessMsg && (
+                    <p className="text-xs text-emerald-500 font-bold">{autoSuccessMsg}</p>
+                  )}
+
+                  <button
+                    id="submit-auto-codes-btn"
+                    type="submit"
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-sans font-bold text-xs px-5 py-2.5 rounded-xl transition duration-150 cursor-pointer shadow-md"
+                  >
+                    Rastgele Kodları Üret ve Sisteme Yükle
+                  </button>
+                </form>
+              </div>
 
               {/* Codes Listing table */}
               <div className="space-y-4">
