@@ -1,0 +1,139 @@
+{
+  "entities": {
+    "Product": {
+      "title": "Product",
+      "description": "An item or digital asset offered for sale",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "itemSatisUrl": { "type": "string" },
+        "price": { "type": "number" },
+        "stockStatus": { "type": "string", "enum": ["var", "yok"] },
+        "deliveryContent": { "type": "object" },
+        "rating": { "type": "number" },
+        "ratingCount": { "type": "number" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "name", "category", "price", "stockStatus", "deliveryContent", "createdAt"]
+    },
+    "StockCode": {
+      "title": "StockCode",
+      "description": "A single-use code to redeem a digital asset purchase",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "productId": { "type": "string" },
+        "used": { "type": "boolean" },
+        "usedBy": { "type": "string" },
+        "usedAt": { "type": "number" }
+      },
+      "required": ["id", "code", "productId", "used"]
+    },
+    "Claim": {
+      "title": "Claim",
+      "description": "A record of a redeemed digital asset",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "stockCode": { "type": "string" },
+        "claimedAt": { "type": "number" },
+        "deliveryContent": { "type": "object" }
+      },
+      "required": ["id", "userId", "userEmail", "productId", "productName", "stockCode", "claimedAt", "deliveryContent"]
+    },
+    "Comment": {
+      "title": "Comment",
+      "description": "A review or comment on a product left by a buyer",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "productId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "productId", "userId", "userEmail", "rating", "comment", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "A notification broadcasted to all users or a specific user",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "type": { "type": "string", "enum": ["info", "success", "alert"] },
+        "createdAt": { "type": "number" },
+        "readBy": { "type": "array" }
+      },
+      "required": ["id", "userId", "title", "message", "type", "createdAt"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "A custom or system product category",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "name", "createdAt"]
+    },
+    "SupportRequest": {
+      "title": "SupportRequest",
+      "description": "A customer support ticket",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "contact": { "type": "string" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "status": { "type": "string", "enum": ["bekliyor", "cozuldu"] }
+      },
+      "required": ["id", "name", "contact", "message", "createdAt", "status"]
+    }
+  },
+  "firestore": {
+    "products": {
+      "schema": { "$ref": "#/entities/Product" },
+      "description": "Catalog of digital products"
+    },
+    "stock_codes": {
+      "schema": { "$ref": "#/entities/StockCode" },
+      "description": "Stock redemption codes for products"
+    },
+    "claims": {
+      "schema": { "$ref": "#/entities/Claim" },
+      "description": "Purchased items or redeemed codes claim records"
+    },
+    "comments": {
+      "schema": { "$ref": "#/entities/Comment" },
+      "description": "Ratings and reviews for products"
+    },
+    "notifications": {
+      "schema": { "$ref": "#/entities/Notification" },
+      "description": "Announcements and direct alerts"
+    },
+    "categories": {
+      "schema": { "$ref": "#/entities/Category" },
+      "description": "List of product categories"
+    },
+    "support_requests": {
+      "schema": { "$ref": "#/entities/SupportRequest" },
+      "description": "Support tickets raised by visitors"
+    }
+  }
+}

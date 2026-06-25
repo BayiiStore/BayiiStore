@@ -1,0 +1,6 @@
+{
+  "name": "E-pin Guard ve Güvenli Teslimat",
+  "description": "BayiiStore için ItemSatış entegrasyonlu, yapay zeka destekli, güvenli e-pin doğrulama ve dosya teslimat yönetim platformu.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
