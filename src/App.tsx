@@ -9,7 +9,6 @@ import StockVerifier from "./components/StockVerifier";
 import AdminPanel from "./components/AdminPanel";
 import SupportForm from "./components/SupportForm";
 import SupportBanner from "./components/SupportBanner";
-import AiAssistant from "./components/AiAssistant";
 import FaqSection from "./components/FaqSection";
 import OrderLibrary from "./components/OrderLibrary";
 import SupportChatWidget from "./components/SupportChatWidget";
@@ -167,9 +166,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-800 dark:text-zinc-100 flex flex-col transition-colors duration-150 selection:bg-indigo-500/30">
       
-      {/* Floating AI Assistant */}
-      <AiAssistant />
-
       {/* Navigation Bar */}
       <Navbar
         user={user}

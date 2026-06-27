@@ -213,13 +213,13 @@ export default function AdminChatManager() {
                       className={`max-w-[80%] rounded-2xl p-3 text-xs leading-relaxed ${
                         isAdmin
                           ? "bg-indigo-600 text-white rounded-tr-none"
-                          : "bg-white dark:bg-zinc-800 text-zinc-800 dark:text-zinc-150 border border-zinc-150 dark:border-zinc-700/50 rounded-tl-none"
+                          : "bg-zinc-200 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100 border border-zinc-300 dark:border-zinc-700 rounded-tl-none"
                       }`}
                     >
-                      <p className="break-words">{m.content}</p>
+                      <p className="break-words font-medium">{m.content}</p>
                       <span
                         className={`text-[9px] block text-right mt-1.5 ${
-                          isAdmin ? "text-indigo-200" : "text-zinc-400 dark:text-zinc-500"
+                          isAdmin ? "text-indigo-200" : "text-zinc-500 dark:text-zinc-400"
                         }`}
                       >
                         {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
