@@ -88,6 +88,15 @@ export default function AdminPanel() {
   const [pTextContent, setPTextContent] = useState("");
 
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [expandedClaimId, setExpandedClaimId] = useState<string | null>(null);
+  const [copiedTextClaim, setCopiedTextClaim] = useState<string | null>(null);
+
+  const copyDefenseText = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedTextClaim(id);
+    setTimeout(() => setCopiedTextClaim(null), 2000);
+  };
+
   const [formStep, setFormStep] = useState<1 | 2>(1);
 
   // Category Form State
@@ -1937,105 +1946,304 @@ export default function AdminPanel() {
                       <th className="px-4 py-3 font-bold uppercase tracking-wider">Dekont Görseli</th>
                       <th className="px-4 py-3 font-bold uppercase tracking-wider">Tarih</th>
                       <th className="px-4 py-3 font-bold uppercase tracking-wider">Teslim Durumu</th>
-                      <th className="px-4 py-3 font-bold uppercase tracking-wider text-right">İşlem</th>
+                      <th className="px-4 py-3 font-bold uppercase tracking-wider text-right">İşlemler</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 text-zinc-700 dark:text-zinc-300">
-                    {claims.map((c: any) => (
-                      <tr id={`admin-row-claim-${c.id}`} key={c.id}>
-                        <td className="px-4 py-3">
-                          <p className="font-bold text-zinc-800 dark:text-white">{c.customerName || "Bilinmeyen"}</p>
-                          <p className="font-mono text-[9px] text-zinc-400">{c.userEmail}</p>
-                        </td>
-                        <td className="px-4 py-3 font-bold text-zinc-800 dark:text-white">{c.productName}</td>
-                        <td className="px-4 py-3 font-mono font-bold text-indigo-600 dark:text-indigo-400">
-                          {c.stockCode === "MANUAL_PENDING" ? (
-                            <span className="px-2 py-0.5 bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 rounded-md text-[10px]">Onay Bekliyor</span>
-                          ) : (
-                            c.stockCode
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          {c.paidPrice !== undefined ? (
-                            <div className="space-y-0.5">
-                              <p className="font-bold text-zinc-800 dark:text-white font-mono">{c.paidPrice.toFixed(2)} TL</p>
-                              {c.couponCode && (
-                                <span className="px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded text-[9px] font-mono font-black uppercase">
-                                  KUPON: {c.couponCode}
+                    {claims.map((c: any) => {
+                      const isExpanded = expandedClaimId === c.id;
+                      const isManualPending = c.stockCode === "MANUAL_PENDING";
+
+                      // 1. Unique Code & First Activation Time Defense Text
+                      const def1 = `Bu kod tek kullanımlık bir şifredir. Alıcı sisteme giriş yapıp onay verene kadar aktiftir. Veritabanı logumuzda görüldüğü üzere, kod ${new Date(c.firstActivationTime || c.claimedAt).toLocaleString("tr-TR")} anında aktifleştirilmiş ve tek seferlik kullanım hakkı bu müşteri tarafından doldurulmuştur. Ayrıca Müşteri Stok kodu girerken Kendi İtemsatış ismini (${c.itemsatisUsername || "Belirtilmeyen"}) de kullanmıştır.`;
+
+                      // 2. User IP & Device Matching Defense Text
+                      const def2 = `Kod, bizim sistemimizde rastgele bir şekilde aktif olmamıştır. Satın alan kişinin dijital ayak izi olan ${c.userIp || "Belirlenemeyen IP"} adresi ve ${c.userAgent || "Belirlenemeyen Cihaz"} tarayıcı parmak izi üzerinden guard sistemimize girilerek kullanılmıştır.`;
+
+                      // 3. Automated Success Screenshot Defense Text
+                      const def3 = `Alıcı kodun hatalı olduğunu iddia etmektedir. Ancak kod hatalı olsaydı sistem bu başarı ekranını açmazdı. Ektedir, kodun müşterinin tarayıcısında sorunsuz çalıştığı ve onaylandığı anın sistem tarafından çekilen orijinal görsel kanıtı.`;
+
+                      return (
+                        <React.Fragment key={c.id}>
+                          <tr id={`admin-row-claim-${c.id}`} className={isExpanded ? "bg-indigo-50/25 dark:bg-indigo-950/10 border-l-4 border-indigo-600 transition-colors" : "transition-colors"}>
+                            <td className="px-4 py-3">
+                              <p className="font-bold text-zinc-800 dark:text-white">{c.customerName || "Bilinmeyen"}</p>
+                              {c.itemsatisUsername && (
+                                <p className="text-[9px] text-indigo-600 dark:text-indigo-400 font-extrabold flex items-center gap-1 mt-1 bg-indigo-100/60 dark:bg-indigo-950/60 w-fit px-1.5 py-0.5 rounded">
+                                  İtemSatış: {c.itemsatisUsername}
+                                </p>
+                              )}
+                              <p className="font-mono text-[9px] text-zinc-400 mt-1">{c.userEmail}</p>
+                            </td>
+                            <td className="px-4 py-3 font-bold text-zinc-800 dark:text-white">{c.productName}</td>
+                            <td className="px-4 py-3 font-mono font-bold text-indigo-600 dark:text-indigo-400">
+                              {isManualPending ? (
+                                <span className="px-2 py-0.5 bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400 rounded-md text-[10px]">Onay Bekliyor</span>
+                              ) : (
+                                c.stockCode
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              {c.paidPrice !== undefined ? (
+                                <div className="space-y-0.5">
+                                  <p className="font-bold text-zinc-800 dark:text-white font-mono">{c.paidPrice.toFixed(2)} TL</p>
+                                  {c.couponCode && (
+                                    <span className="px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded text-[9px] font-mono font-black uppercase">
+                                      KUPON: {c.couponCode}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-zinc-400 font-mono italic">-</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">
+                              {c.receiptImage ? (
+                                <a
+                                  href={`data:image/png;base64,${c.receiptImage}`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 font-bold rounded-lg hover:underline"
+                                >
+                                  Dekont Gör
+                                </a>
+                              ) : (
+                                <span className="text-[10px] text-zinc-400 italic">Yok</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3">{new Date(c.claimedAt).toLocaleString("tr-TR")}</td>
+                            <td className="px-4 py-3">
+                              {c.isConfirmedByUser ? (
+                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold flex items-center gap-1 w-fit ${c.autoConfirmed ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/20 dark:text-amber-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400'}`}>
+                                  {c.autoConfirmed ? (
+                                    <>
+                                      <Clock className="w-3 h-3" />
+                                      Oto Onaylandı
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle2 className="w-3 h-3" />
+                                      Müşteri Onayladı
+                                    </>
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 bg-zinc-100 text-zinc-400 dark:bg-zinc-800/50 dark:text-zinc-500 rounded-full text-[9px] font-bold flex items-center gap-1 w-fit">
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                  Bekleniyor
                                 </span>
                               )}
-                            </div>
-                          ) : (
-                            <span className="text-zinc-400 font-mono italic">-</span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                {!isManualPending && (
+                                  <button
+                                    onClick={() => setExpandedClaimId(isExpanded ? null : c.id)}
+                                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition flex items-center gap-1 cursor-pointer ${
+                                      isExpanded
+                                        ? "bg-zinc-800 text-white dark:bg-white dark:text-zinc-900"
+                                        : "bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-950/30 dark:hover:bg-indigo-950/50 dark:text-indigo-400"
+                                    }`}
+                                  >
+                                    <ShieldCheck className="w-3 h-3" />
+                                    {isExpanded ? "Kanıtları Kapat" : "Savunma Kanıtı"}
+                                  </button>
+                                )}
+                                {isManualPending ? (
+                                  <button
+                                    onClick={async () => {
+                                      const newCode = "PAPARA-" + (c.customerName?.toUpperCase().replace(/\s+/g, "_") || "MANUAL") + "-" + Math.floor(1000 + Math.random() * 9000);
+                                      await updateDoc(doc(db, "claims", c.id), {
+                                        stockCode: newCode,
+                                        status: 'approved'
+                                      });
+                                      const notifId = "notif-" + Date.now();
+                                      await setDoc(doc(db, "notifications", notifId), {
+                                        id: notifId,
+                                        userId: c.userId,
+                                        title: "Papara Ödemeniz Onaylandı!",
+                                        message: `'${c.productName}' adlı ürün için yaptığınız ödeme yöneticiler tarafından onaylandı. Teslimatınız sağlandı.`,
+                                        type: "success",
+                                        createdAt: Date.now(),
+                                        readBy: []
+                                      });
+                                    }}
+                                    className="px-3 py-1 bg-indigo-600 text-white rounded-lg text-[10px] font-bold shadow-md hover:bg-indigo-700 cursor-pointer"
+                                  >
+                                    Onayla
+                                  </button>
+                                ) : (
+                                  <span className="text-[10px] text-zinc-400 font-medium">Teslim Edildi</span>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+
+                          {/* Expanded Security Defense Proof Bento Grid */}
+                          {isExpanded && (
+                            <tr className="bg-zinc-100/50 dark:bg-zinc-900/30 border-l-4 border-indigo-600">
+                              <td colSpan={8} className="p-5 border-t border-b border-zinc-200 dark:border-zinc-800">
+                                <div className="space-y-4">
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <ShieldCheck className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                                      <h4 className="font-sans font-black text-sm text-zinc-800 dark:text-white uppercase tracking-wider">
+                                        İtemSatış Alıcı İtiraz / Yetkili Savunma Kanıt Merkezi
+                                      </h4>
+                                    </div>
+                                    <span className="text-[10px] bg-indigo-100 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 font-extrabold px-2.5 py-1 rounded-full">
+                                      E-pin Guard Evidence Vault v2.1
+                                    </span>
+                                  </div>
+
+                                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                                    {/* 1. Unique Code & Activation Log */}
+                                    <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col justify-between space-y-3.5 shadow-sm">
+                                      <div>
+                                        <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-2 mb-2">
+                                          <span className="font-sans font-black text-[10px] text-zinc-400 uppercase tracking-wider">1. EŞSİZ KOD VE İLK AKTİVASYON</span>
+                                          <Clock className="w-4 h-4 text-emerald-500" />
+                                        </div>
+                                        <div className="space-y-1 text-[11px] font-mono text-zinc-600 dark:text-zinc-300">
+                                          <p><span className="text-zinc-400 font-sans font-semibold">Kod:</span> <span className="font-bold text-indigo-600 dark:text-indigo-400">{c.stockCode}</span></p>
+                                          <p><span className="text-zinc-400 font-sans font-semibold">Kullanıcı Adı:</span> <span className="font-bold text-emerald-600 dark:text-emerald-400">{c.itemsatisUsername || "Girilmedi"}</span></p>
+                                          <p><span className="text-zinc-400 font-sans font-semibold">Aktivasyon:</span> <span className="font-bold">{new Date(c.firstActivationTime || c.claimedAt).toLocaleString("tr-TR")}</span></p>
+                                          <p className="text-[10px] text-zinc-400 leading-normal mt-2.5 bg-zinc-50 dark:bg-zinc-950 p-2 rounded-xl border border-zinc-150 dark:border-zinc-800">
+                                            <span className="text-amber-600 dark:text-amber-400 font-bold block mb-0.5">LOG VERİSİ VERİTABANI KANITI:</span>
+                                            Stok kodu statüsü "Aktif" durumundan "Kullanıldı (Pasif)" durumuna geçtiği an: {new Date(c.firstActivationTime || c.claimedAt).toLocaleString("tr-TR")} (Zaman damgası: {c.firstActivationTime || c.claimedAt})
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
+                                        <div className="p-2 bg-zinc-50 dark:bg-zinc-950 rounded-xl max-h-20 overflow-y-auto text-[10px] text-zinc-500 dark:text-zinc-400 leading-relaxed italic">
+                                          "{def1}"
+                                        </div>
+                                        <button
+                                          onClick={() => copyDefenseText(def1, `${c.id}-1`)}
+                                          className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded-xl transition flex items-center justify-center gap-1 cursor-pointer"
+                                        >
+                                          {copiedTextClaim === `${c.id}-1` ? (
+                                            <>
+                                              <Check className="w-3.5 h-3.5 text-emerald-300" />
+                                              Savunma Metni Kopyalandı!
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Copy className="w-3.5 h-3.5" />
+                                              Yetkili Savunma Metnini Kopyala
+                                            </>
+                                          )}
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* 2. IP and Device Match */}
+                                    <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col justify-between space-y-3.5 shadow-sm">
+                                      <div>
+                                        <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-2 mb-2">
+                                          <span className="font-sans font-black text-[10px] text-zinc-400 uppercase tracking-wider">2. KULLANICI IP VE CİHAZ EŞLEŞMESİ</span>
+                                          <Activity className="w-4 h-4 text-indigo-500" />
+                                        </div>
+                                        <div className="space-y-1 text-[11px] font-mono text-zinc-600 dark:text-zinc-300">
+                                          <p><span className="text-zinc-400 font-sans font-semibold">Cihaz IP:</span> <span className="font-bold text-zinc-800 dark:text-white">{c.userIp || "Bilinmiyor"}</span></p>
+                                          <p className="line-clamp-2" title={c.userAgent}><span className="text-zinc-400 font-sans font-semibold">User-Agent:</span> <span className="text-[10px]">{c.userAgent || "Bilinmiyor"}</span></p>
+                                          <p className="text-[10px] text-zinc-400 leading-normal mt-2.5 bg-zinc-50 dark:bg-zinc-950 p-2 rounded-xl border border-zinc-150 dark:border-zinc-800">
+                                            <span className="text-amber-600 dark:text-amber-400 font-bold block mb-0.5">LOG VERİSİ TEKNİK KANIT:</span>
+                                            Kodu guard sistemine giren alıcının doğrulama anındaki dijital ayak izi ve IP parmak izi.
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
+                                        <div className="p-2 bg-zinc-50 dark:bg-zinc-950 rounded-xl max-h-20 overflow-y-auto text-[10px] text-zinc-500 dark:text-zinc-400 leading-relaxed italic">
+                                          "{def2}"
+                                        </div>
+                                        <button
+                                          onClick={() => copyDefenseText(def2, `${c.id}-2`)}
+                                          className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded-xl transition flex items-center justify-center gap-1 cursor-pointer"
+                                        >
+                                          {copiedTextClaim === `${c.id}-2` ? (
+                                            <>
+                                              <Check className="w-3.5 h-3.5 text-emerald-300" />
+                                              Savunma Metni Kopyalandı!
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Copy className="w-3.5 h-3.5" />
+                                              Yetkili Savunma Metnini Kopyala
+                                            </>
+                                          )}
+                                        </button>
+                                      </div>
+                                    </div>
+
+                                    {/* 3. Automatic Success Screen Snapshot (Görsel Mühür) */}
+                                    <div className="bg-white dark:bg-zinc-900 p-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 flex flex-col justify-between space-y-3.5 shadow-sm">
+                                      <div>
+                                        <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-2 mb-2">
+                                          <span className="font-sans font-black text-[10px] text-zinc-400 uppercase tracking-wider">3. OTOMATİK BAŞARI EKRANI GÖRÜNTÜSÜ</span>
+                                          <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                                        </div>
+                                        <div className="space-y-2 text-[11px] text-zinc-600 dark:text-zinc-300">
+                                          {c.successScreenshot ? (
+                                            <div className="relative group rounded-xl overflow-hidden border border-zinc-150 dark:border-zinc-800 shadow-sm bg-zinc-50 dark:bg-zinc-950">
+                                              <img
+                                                src={c.successScreenshot}
+                                                alt="Otomatik Başarı Mührü"
+                                                className="w-full h-24 object-contain"
+                                              />
+                                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition duration-150 flex items-center justify-center">
+                                                <a
+                                                  href={c.successScreenshot}
+                                                  target="_blank"
+                                                  rel="noreferrer"
+                                                  className="bg-white text-zinc-850 px-2.5 py-1 rounded-lg text-[9px] font-bold shadow-md hover:scale-105 transition"
+                                                >
+                                                  Görseli Tam Boyut Aç
+                                                </a>
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            <div className="h-24 bg-zinc-50 dark:bg-zinc-950 border border-zinc-150 dark:border-zinc-800 rounded-xl flex flex-col items-center justify-center text-center p-2">
+                                              <Loader2 className="w-4 h-4 text-indigo-500 animate-spin mb-1" />
+                                              <span className="text-[10px] text-zinc-400">Görsel log alınamadı veya bekleniyor...</span>
+                                            </div>
+                                          )}
+                                          <p className="text-[10px] text-zinc-400 leading-normal bg-zinc-50 dark:bg-zinc-950 p-2 rounded-xl border border-zinc-150 dark:border-zinc-800 font-sans mt-2">
+                                            <span className="text-emerald-600 dark:text-emerald-400 font-bold block mb-0.5">GÖRSEL MÜHÜR DETAYI:</span>
+                                            Sistem, kod doğruluğunu onayladığı an, teslimat ekranının tarayıcı görüntüsünü kanıt olarak Firebase veritabanına kaydetmiştir.
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <div className="pt-2 border-t border-zinc-100 dark:border-zinc-800 space-y-2">
+                                        <div className="p-2 bg-zinc-50 dark:bg-zinc-950 rounded-xl max-h-20 overflow-y-auto text-[10px] text-zinc-500 dark:text-zinc-400 leading-relaxed italic">
+                                          "{def3}"
+                                        </div>
+                                        <button
+                                          onClick={() => copyDefenseText(def3, `${c.id}-3`)}
+                                          className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-[10px] font-bold rounded-xl transition flex items-center justify-center gap-1 cursor-pointer"
+                                        >
+                                          {copiedTextClaim === `${c.id}-3` ? (
+                                            <>
+                                              <Check className="w-3.5 h-3.5 text-emerald-300" />
+                                              Savunma Metni Kopyalandı!
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Copy className="w-3.5 h-3.5" />
+                                              Yetkili Savunma Metnini Kopyala
+                                            </>
+                                          )}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
                           )}
-                        </td>
-                        <td className="px-4 py-3">
-                          {c.receiptImage ? (
-                            <a
-                              href={`data:image/png;base64,${c.receiptImage}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400 font-bold rounded-lg hover:underline"
-                            >
-                              Dekont Gör
-                            </a>
-                          ) : (
-                            <span className="text-[10px] text-zinc-400 italic">Yok</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">{new Date(c.claimedAt).toLocaleString("tr-TR")}</td>
-                        <td className="px-4 py-3">
-                          {c.isConfirmedByUser ? (
-                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold flex items-center gap-1 w-fit ${c.autoConfirmed ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/20 dark:text-amber-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400'}`}>
-                              {c.autoConfirmed ? (
-                                <>
-                                  <Clock className="w-3 h-3" />
-                                  Oto Onaylandı
-                                </>
-                              ) : (
-                                <>
-                                  <CheckCircle2 className="w-3 h-3" />
-                                  Müşteri Onayladı
-                                </>
-                              )}
-                            </span>
-                          ) : (
-                            <span className="px-2 py-0.5 bg-zinc-100 text-zinc-400 dark:bg-zinc-800/50 dark:text-zinc-500 rounded-full text-[9px] font-bold flex items-center gap-1 w-fit">
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                              Bekleniyor
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          {c.stockCode === "MANUAL_PENDING" ? (
-                            <button
-                              onClick={async () => {
-                                const newCode = "PAPARA-" + (c.customerName?.toUpperCase().replace(/\s+/g, "_") || "MANUAL") + "-" + Math.floor(1000 + Math.random() * 9000);
-                                await updateDoc(doc(db, "claims", c.id), {
-                                  stockCode: newCode,
-                                  status: 'approved'
-                                });
-                                const notifId = "notif-" + Date.now();
-                                await setDoc(doc(db, "notifications", notifId), {
-                                  id: notifId,
-                                  userId: c.userId,
-                                  title: "Papara Ödemeniz Onaylandı!",
-                                  message: `'${c.productName}' adlı ürün için yaptığınız ödeme yöneticiler tarafından onaylandı. Teslimatınız sağlandı.`,
-                                  type: "success",
-                                  createdAt: Date.now(),
-                                  readBy: []
-                                });
-                              }}
-                              className="px-3 py-1 bg-indigo-600 text-white rounded-lg text-[10px] font-bold shadow-md hover:bg-indigo-700 cursor-pointer"
-                            >
-                              Onayla
-                            </button>
-                          ) : (
-                            <span className="text-[10px] text-zinc-400">Tamamlandı</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                        </React.Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

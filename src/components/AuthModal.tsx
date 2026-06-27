@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, Lock, Mail, User as UserIcon, Loader2 } from 'lucide-react';
 import { auth, db, googleProvider } from '../firebase';
+import AgreementModal from './AgreementModal';
+import { REGISTRATION_AGREEMENT, DIGITAL_CONTENT_AGREEMENT } from '../constants/agreements';
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 
@@ -15,8 +17,14 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [bankFullName, setBankFullName] = useState('');
+  const [itemsatisUsername, setItemsatisUsername] = useState('');
+  const [itemsatisFullName, setItemsatisFullName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  const [agreeRegistration, setAgreeRegistration] = useState(false);
+  const [agreeDigital, setAgreeDigital] = useState(false);
+  const [activeAgreement, setActiveAgreement] = useState<'registration' | 'digital' | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +39,21 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
         if (bankFullName.split(' ').length < 2) {
           throw new Error('Lütfen hem adınızı hem de soyadınızı girin.');
         }
+        if (!itemsatisUsername.trim()) {
+          throw new Error('Lütfen İtemSatış kullanıcı adınızı girin. Bu doğrulama için zorunludur.');
+        }
+        if (!itemsatisFullName.trim()) {
+          throw new Error('Lütfen İtemSatış hesabınızda kayıtlı olan ad ve soyadınızı girin.');
+        }
+        if (itemsatisFullName.trim().split(' ').length < 2) {
+          throw new Error('Lütfen İtemSatış hesabınızdaki hem adınızı hem de soyadınızı girin.');
+        }
+        if (!agreeRegistration) {
+          throw new Error('Lütfen Kayıt ve Gizlilik Sözleşmesi\'ni onaylayın.');
+        }
+        if (!agreeDigital) {
+          throw new Error('Lütfen Dijital İçerik ve Kullanım Sözleşmesi\'ni onaylayın.');
+        }
 
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         const user = userCredential.user;
@@ -40,6 +63,8 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
           uid: user.uid,
           email: user.email,
           bankFullName: bankFullName.trim(),
+          itemsatisUsername: itemsatisUsername.trim(),
+          itemsatisFullName: itemsatisFullName.trim(),
           role: 'user',
           createdAt: Date.now()
         });
@@ -141,27 +166,73 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 {mode === 'register' && (
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider ml-1">
-                      Ad & Soyad (Banka / Papara ile Aynı Olmalı)
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <UserIcon className="h-4 w-4 text-zinc-500" />
+                  <>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider ml-1">
+                        Ad & Soyad (Banka / Papara ile Aynı Olmalı)
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <UserIcon className="h-4 w-4 text-zinc-500" />
+                        </div>
+                        <input
+                          type="text"
+                          required
+                          value={bankFullName}
+                          onChange={(e) => setBankFullName(e.target.value)}
+                          placeholder="Örn: Ahmet Yılmaz"
+                          className="w-full pl-10 pr-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                        />
                       </div>
-                      <input
-                        type="text"
-                        required
-                        value={bankFullName}
-                        onChange={(e) => setBankFullName(e.target.value)}
-                        placeholder="Örn: Ahmet Yılmaz"
-                        className="w-full pl-10 pr-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
-                      />
+                      <p className="text-[10px] text-zinc-500 ml-1">
+                        ⚠️ Dekont doğrulamasında sorun yaşamamak için lütfen hesap adınızı doğru girin.
+                      </p>
                     </div>
-                    <p className="text-[10px] text-zinc-500 ml-1">
-                      ⚠️ Dekont doğrulamasında sorun yaşamamak için lütfen hesap adınızı doğru girin.
-                    </p>
-                  </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider ml-1">
+                        İtemSatış Kullanıcı Adınız
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <UserIcon className="h-4 w-4 text-zinc-500" />
+                        </div>
+                        <input
+                          type="text"
+                          required
+                          value={itemsatisUsername}
+                          onChange={(e) => setItemsatisUsername(e.target.value)}
+                          placeholder="Örn: Kiwoo35"
+                          className="w-full pl-10 pr-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                        />
+                      </div>
+                      <p className="text-[10px] text-zinc-500 ml-1">
+                        ⚠️ Kod doğrulaması yaparken bu kullanıcı adı eşleştirilecektir.
+                      </p>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider ml-1">
+                        İtemSatış'a Kayıtlı İsim Soyisim
+                      </label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <UserIcon className="h-4 w-4 text-zinc-500" />
+                        </div>
+                        <input
+                          type="text"
+                          required
+                          value={itemsatisFullName}
+                          onChange={(e) => setItemsatisFullName(e.target.value)}
+                          placeholder="Örn: Ahmet Yılmaz"
+                          className="w-full pl-10 pr-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
+                        />
+                      </div>
+                      <p className="text-[10px] text-zinc-500 ml-1">
+                        ⚠️ İtemSatış hesabınızda kayıtlı olan gerçek adınız ve soyadınız ile birebir aynı olmalıdır.
+                      </p>
+                    </div>
+                  </>
                 )}
 
                 <div className="space-y-1">
@@ -202,9 +273,51 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                   </div>
                 </div>
 
+                {mode === 'register' && (
+                  <div className="space-y-3.5 my-4 border-t border-b border-zinc-900 py-3.5 px-1">
+                    <label className="flex items-start gap-3 cursor-pointer group select-none">
+                      <input
+                        type="checkbox"
+                        checked={agreeRegistration}
+                        onChange={(e) => setAgreeRegistration(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-zinc-800 bg-zinc-900 text-indigo-600 focus:ring-indigo-500/20 focus:ring-2 transition-all cursor-pointer accent-indigo-600"
+                      />
+                      <span className="text-[11px] leading-relaxed text-zinc-400 group-hover:text-zinc-300 transition-colors">
+                        <button
+                          type="button"
+                          onClick={() => setActiveAgreement('registration')}
+                          className="font-black text-indigo-400 hover:text-indigo-300 underline cursor-pointer text-left mr-1 inline"
+                        >
+                          Kayıt ve Gizlilik Sözleşmesi
+                        </button>
+                        şartlarını okudum, anladım ve verilerimin güvenlik amaçlı loglanmasını kabul ediyorum. <span className="text-red-500">*</span>
+                      </span>
+                    </label>
+
+                    <label className="flex items-start gap-3 cursor-pointer group select-none">
+                      <input
+                        type="checkbox"
+                        checked={agreeDigital}
+                        onChange={(e) => setAgreeDigital(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-zinc-800 bg-zinc-900 text-indigo-600 focus:ring-indigo-500/20 focus:ring-2 transition-all cursor-pointer accent-indigo-600"
+                      />
+                      <span className="text-[11px] leading-relaxed text-zinc-400 group-hover:text-zinc-300 transition-colors">
+                        <button
+                          type="button"
+                          onClick={() => setActiveAgreement('digital')}
+                          className="font-black text-indigo-400 hover:text-indigo-300 underline cursor-pointer text-left mr-1 inline"
+                        >
+                          Dijital İçerik ve Kullanım Sözleşmesi
+                        </button>
+                        şartlarını tamamen kabul ediyorum, aktivasyon sonrasında iade hakkımın olmadığını onaylıyorum. <span className="text-red-500">*</span>
+                      </span>
+                    </label>
+                  </div>
+                )}
+
                 <button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={isLoading || (mode === 'register' && (!agreeRegistration || !agreeDigital))}
                   className="w-full mt-2 bg-white hover:bg-zinc-200 text-black font-sans font-bold py-3 px-4 rounded-xl transition-colors text-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? (
@@ -264,6 +377,20 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
               </div>
             </motion.div>
           </motion.div>
+
+          <AgreementModal
+            isOpen={activeAgreement === 'registration'}
+            onClose={() => setActiveAgreement(null)}
+            title={REGISTRATION_AGREEMENT.title}
+            content={REGISTRATION_AGREEMENT.content}
+          />
+
+          <AgreementModal
+            isOpen={activeAgreement === 'digital'}
+            onClose={() => setActiveAgreement(null)}
+            title={DIGITAL_CONTENT_AGREEMENT.title}
+            content={DIGITAL_CONTENT_AGREEMENT.content}
+          />
         </>
       )}
     </AnimatePresence>

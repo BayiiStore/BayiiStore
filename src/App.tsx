@@ -15,6 +15,7 @@ import SupportChatWidget from "./components/SupportChatWidget";
 import { Claim, UserProfile } from "./types";
 import { ShieldCheck, KeyRound, ArrowRight, Download, Play, FileText, Sparkles, Clock, LockKeyhole, Laptop, ExternalLink, HelpCircle, Copy, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import ProfileCompletionOverlay from "./components/ProfileCompletionOverlay";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -163,6 +164,20 @@ export default function App() {
     tierDiscountPercent = 2;
   }
 
+  // Check if user has an incomplete profile (must have valid bankFullName, itemsatisUsername, and itemsatisFullName)
+  const isProfileIncomplete = !!(
+    user &&
+    userProfile &&
+    userProfile.role !== "admin" &&
+    (!userProfile.bankFullName ||
+      userProfile.bankFullName === "Banka İsmi Belirtilmedi" ||
+      userProfile.bankFullName.trim() === "" ||
+      !userProfile.itemsatisUsername ||
+      userProfile.itemsatisUsername.trim() === "" ||
+      !userProfile.itemsatisFullName ||
+      userProfile.itemsatisFullName.trim() === "")
+  );
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-800 dark:text-zinc-100 flex flex-col transition-colors duration-150 selection:bg-indigo-500/30">
       
@@ -175,6 +190,18 @@ export default function App() {
         setIsDarkMode={setIsDarkMode}
         userClaims={userClaims}
       />
+
+      {/* Mandatory Profile Onboarding Modal for Google or Legacy incomplete profiles */}
+      {isProfileIncomplete && (
+        <ProfileCompletionOverlay
+          currentUserId={user!.uid}
+          currentUserEmail={user!.email || "anon@bayiistore.com"}
+          userProfile={userProfile}
+          onComplete={(updatedProfile) => {
+            setUserProfile(updatedProfile);
+          }}
+        />
+      )}
 
       {/* Main Body */}
       <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-6">

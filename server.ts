@@ -187,6 +187,65 @@ app.post("/api/gemini/generate-image", async (req, res) => {
   }
 });
 
+// 3.5 API: İtemSatış User Profile exists checker proxy
+app.get("/api/itemsatis/verify/:username", async (req, res) => {
+  try {
+    const { username } = req.params;
+    if (!username || typeof username !== "string") {
+      return res.status(400).json({ error: "Kullanıcı adı gereklidir." });
+    }
+
+    const cleanUsername = username.trim().replace(/[^a-zA-Z0-9\-_]/g, "");
+    if (!cleanUsername) {
+      return res.json({ exists: false, reason: "Geçersiz kullanıcı adı formatı." });
+    }
+
+    const url = `https://www.itemsatis.com/profil/${cleanUsername}.html`;
+    console.log("Checking İtemSatış profile:", url);
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
+        "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache"
+      }
+    });
+
+    console.log(`İtemSatış response status for ${cleanUsername}: ${response.status}`);
+
+    if (response.status === 404) {
+      return res.json({ exists: false, reason: "İtemSatış profili bulunamadı." });
+    }
+
+    const html = await response.text();
+    
+    if (
+      html.includes("Böyle Bir Kullanıcı Bulunamadı") || 
+      html.includes("Hata") || 
+      html.includes("Sayfa Bulunamadı") ||
+      html.includes("404 - Sayfa Bulunamadı") ||
+      html.includes("böyle bir profil") ||
+      response.url.includes("404") ||
+      response.url.includes("hata") ||
+      html.length < 500
+    ) {
+      return res.json({ exists: false, reason: "Böyle bir İtemSatış profili mevcut değil." });
+    }
+
+    return res.json({ exists: true, profileUrl: url });
+  } catch (err: any) {
+    console.error("İtemSatış verify error:", err);
+    // Return exists: true with warning so network/CORS/CF blocking doesn't completely block legitimate clients
+    return res.json({ 
+      exists: true, 
+      warning: "İtemSatış sunucusuna bağlanılamadı. Doğrulama başarılı sayıldı." 
+    });
+  }
+});
+
 // 4. API: AI Deposit Receipt (Dekont) Verifier (gemini-3.5-flash with Multimodal Vision)
 app.post("/api/gemini/verify-dekont", async (req, res) => {
   try {

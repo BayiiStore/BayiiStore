@@ -54,6 +54,8 @@ export interface UserProfile {
   uid: string;
   email: string;
   bankFullName: string;
+  itemsatisUsername?: string;
+  itemsatisFullName?: string;
   role: 'user' | 'admin';
   createdAt: number;
 }
