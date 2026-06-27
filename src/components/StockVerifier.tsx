@@ -89,7 +89,8 @@ export default function StockVerifier({ currentUserId, currentUserEmail, onClaim
         productName: prodData.name,
         stockCode: stockCodeInput.trim(),
         claimedAt: Date.now(),
-        deliveryContent: prodData.deliveryContent
+        deliveryContent: prodData.deliveryContent,
+        isConfirmedByUser: false
       };
       batch.set(claimRef, claimPayload);
 
@@ -105,7 +106,25 @@ export default function StockVerifier({ currentUserId, currentUserEmail, onClaim
         readBy: []
       });
 
+      // Add a confirmation notification
+      const confirmNotifRef = doc(collection(db, "notifications"));
+      batch.set(confirmNotifRef, {
+        id: confirmNotifRef.id,
+        userId: currentUserId,
+        title: "Sipariş Onayı Bekleniyor",
+        message: `'${prodData.name}' ürününü teslim aldınız. Eğer her şey yolundaysa lütfen siparişi onaylayın. 24 saat içinde onaylanmazsa sistem tarafından otomatik onaylanacaktır.`,
+        type: "order_approval",
+        createdAt: Date.now(),
+        readBy: [],
+        claimId: claimRef.id
+      });
+
       await batch.commit();
+
+      // Auto open notifications panel
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("open-notifications"));
+      }, 500);
 
       setUnlockedProduct(prodData);
       setUnlockedContent(prodData.deliveryContent);

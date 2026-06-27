@@ -154,7 +154,7 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
                         required
                         value={bankFullName}
                         onChange={(e) => setBankFullName(e.target.value)}
-                        placeholder="Örn: Canet Karabacak"
+                        placeholder="Örn: Ahmet Yılmaz"
                         className="w-full pl-10 pr-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-indigo-500 transition-colors"
                       />
                     </div>

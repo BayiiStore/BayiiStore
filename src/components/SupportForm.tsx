@@ -64,7 +64,7 @@ export default function SupportForm() {
               <Sparkles className="w-4 h-4 text-purple-500 flex-shrink-0" />
               <div>
                 <p className="font-bold text-zinc-700 dark:text-zinc-300">İsim & Papara Alıcısı</p>
-                <p className="text-zinc-500 dark:text-zinc-400">Canet Karabacak</p>
+                <p className="text-zinc-500 dark:text-zinc-400">BayiiStore Yetkilisi</p>
               </div>
             </div>
           </div>
@@ -89,7 +89,7 @@ export default function SupportForm() {
                   Destek Talebiniz Alındı!
                 </h4>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-sm mx-auto mb-4">
-                  Şikayetiniz veya talebiniz Canet Karabacak'a başarıyla iletilmiştir. Gerekli kontroller sağlanarak tarafınıza en kısa sürede dönüş yapılacaktır.
+                  Şikayetiniz veya talebiniz sistem yöneticilerimize başarıyla iletilmiştir. Gerekli kontroller sağlanarak tarafınıza en kısa sürede dönüş yapılacaktır.
                 </p>
                 <button
                   onClick={() => setStatus("idle")}
@@ -116,7 +116,7 @@ export default function SupportForm() {
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Örn: Canet Karabacak"
+                    placeholder="Örn: Ahmet Yılmaz"
                     className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-xs text-zinc-800 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition"
                   />
                 </div>

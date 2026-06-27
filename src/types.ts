@@ -43,6 +43,8 @@ export interface Claim {
   receiptImage?: string; // base64 dekont
   status?: 'pending' | 'approved' | 'rejected';
   customerName?: string; // Bank account name
+  isConfirmedByUser?: boolean;
+  confirmedAt?: number;
 }
 
 export interface UserProfile {
@@ -68,9 +70,10 @@ export interface Notification {
   userId: string; // 'all' or specific userId
   title: string;
   message: string;
-  type: 'info' | 'success' | 'alert';
+  type: 'info' | 'success' | 'alert' | 'order_approval';
   createdAt: number;
   readBy?: string[]; // Array of userIds who read it
+  claimId?: string; // For order_approval notifications
 }
 
 export interface ChatMessage {

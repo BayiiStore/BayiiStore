@@ -5,6 +5,7 @@ import { signOut, User } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import NotificationDropdown from "./NotificationDropdown";
 import AuthModal from "./AuthModal";
+import { Claim } from "../types";
 
 interface NavbarProps {
   user: User | null;
@@ -12,9 +13,10 @@ interface NavbarProps {
   setIsAdminMode: (mode: boolean) => void;
   isDarkMode: boolean;
   setIsDarkMode: (dark: boolean) => void;
+  userClaims: Claim[];
 }
 
-export default function Navbar({ user, isAdminMode, setIsAdminMode, isDarkMode, setIsDarkMode }: NavbarProps) {
+export default function Navbar({ user, isAdminMode, setIsAdminMode, isDarkMode, setIsDarkMode, userClaims }: NavbarProps) {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [bankName, setBankName] = useState<string>('');
 
@@ -89,7 +91,7 @@ export default function Navbar({ user, isAdminMode, setIsAdminMode, isDarkMode, 
             </button>
 
             {/* Real-time Notifications */}
-            <NotificationDropdown currentUserId={user ? user.uid : "anonymous_client"} />
+            <NotificationDropdown currentUserId={user ? user.uid : "anonymous_client"} userClaims={userClaims} />
 
             {/* Panel Toggle Button */}
             <button

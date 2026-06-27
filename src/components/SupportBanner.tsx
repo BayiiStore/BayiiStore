@@ -12,7 +12,7 @@ export default function SupportBanner() {
 
   const paparaNo = "1553852811";
   const ibanNo = "TR40 0082 9000 0949 1553 8528 11";
-  const receiverName = "Canet Karabacak";
+  const receiverName = "BayiiStore Yetkilisi";
 
   return (
     <div id="support-banner" className="bg-zinc-100 dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 py-12 px-6">

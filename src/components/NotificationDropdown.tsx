@@ -2,17 +2,28 @@ import React, { useState, useEffect } from "react";
 import { Bell, Check, Trash2, Info, CheckCircle, AlertTriangle, Clock } from "lucide-react";
 import { collection, query, onSnapshot, doc, updateDoc, arrayUnion, orderBy } from "firebase/firestore";
 import { db } from "../firebase";
-import { Notification } from "../types";
+import { Notification, Claim } from "../types";
 import { motion, AnimatePresence } from "motion/react";
 
 interface NotificationDropdownProps {
   currentUserId: string;
+  userClaims: Claim[];
 }
 
-export default function NotificationDropdown({ currentUserId }: NotificationDropdownProps) {
+export default function NotificationDropdown({ currentUserId, userClaims }: NotificationDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const handleOpen = () => {
+      setIsOpen(true);
+    };
+    window.addEventListener("open-notifications", handleOpen);
+    return () => {
+      window.removeEventListener("open-notifications", handleOpen);
+    };
+  }, []);
 
   useEffect(() => {
     const q = query(collection(db, "notifications"), orderBy("createdAt", "desc"));
@@ -88,6 +99,19 @@ export default function NotificationDropdown({ currentUserId }: NotificationDrop
     if (mins < 60) return `${mins} dk önce`;
     if (hrs < 24) return `${hrs} saat önce`;
     return `${days} gün önce`;
+  };
+
+  const handleConfirmOrder = async (notifId: string, claimId: string) => {
+    try {
+      const claimRef = doc(db, "claims", claimId);
+      await updateDoc(claimRef, {
+        isConfirmedByUser: true,
+        confirmedAt: Date.now()
+      });
+      await handleMarkAsRead(notifId);
+    } catch (error) {
+      console.error("Error confirming order:", error);
+    }
   };
 
   return (
@@ -176,6 +200,30 @@ export default function NotificationDropdown({ currentUserId }: NotificationDrop
                             <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed break-words">
                               {n.message}
                             </p>
+                            
+                            {n.type === 'order_approval' && n.claimId && (() => {
+                              const claim = userClaims.find(c => c.id === n.claimId);
+                              const isClaimConfirmed = claim ? claim.isConfirmedByUser : false;
+                              if (isClaimConfirmed) {
+                                return (
+                                  <div className="mt-3 flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/20 px-3 py-1.5 rounded-xl border border-emerald-100 dark:border-emerald-900/30 w-full justify-center">
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                    Teslimat Onaylandı
+                                  </div>
+                                );
+                              } else {
+                                return (
+                                  <button
+                                    onClick={() => handleConfirmOrder(n.id, n.claimId!)}
+                                    className="mt-3 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-sans font-bold py-2 px-3 rounded-xl text-[10px] transition shadow-md flex items-center justify-center gap-1.5 cursor-pointer"
+                                  >
+                                    <CheckCircle className="w-3.5 h-3.5" />
+                                    Teslimatı Onayla
+                                  </button>
+                                );
+                              }
+                            })()}
+
                             {!isRead && (
                               <button
                                 id={`mark-read-btn-${n.id}`}

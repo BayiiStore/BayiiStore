@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Product, Comment } from "../types";
-import { Star, MessageSquare, ShieldAlert, ShoppingBag, Send, AlertCircle, Sparkles, ArrowLeft, Smartphone, CreditCard, Check, Copy, Loader2, CheckCircle2 } from "lucide-react";
-import { collection, query, where, getDocs, addDoc, doc, updateDoc, orderBy, onSnapshot } from "firebase/firestore";
+import { Star, MessageSquare, ShieldAlert, ShoppingBag, Send, AlertCircle, Sparkles, ArrowLeft, Smartphone, CreditCard, Check, Copy, Loader2, CheckCircle2, MessageCircle } from "lucide-react";
+import { collection, query, where, getDocs, addDoc, doc, updateDoc, orderBy, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import StockVerifier from "./StockVerifier";
 import { motion, AnimatePresence } from "motion/react";
@@ -20,6 +20,7 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
   const [newRating, setNewRating] = useState(10); // 1-10 scale
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
   const [commentError, setCommentError] = useState("");
+  const [commentMethod, setCommentMethod] = useState<"itemsatis" | "bayiistore">("bayiistore");
 
   // Papara payment states
   const [paparaStep, setPaparaStep] = useState<"none" | "name_input" | "payment_instructions" | "verifying" | "success">("none");
@@ -73,6 +74,12 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
     }
   };
 
+  const getWhatsAppMessageUrl = () => {
+    const finalPrice = getFinalPrice();
+    const text = `Merhaba BayiiStore Yetkilisi,\n\nBen *${customerName || "Bir Müşteri"}*, *${product.name}* ürünü için *${finalPrice.toFixed(2)} TL* tutarında ödememi *${paymentMethod === "papara" ? "Papara" : "IBAN (Banka Transferi)"}* yoluyla gönderdim.\n\nDekont dosyamı ekte iletiyorum, lütfen kontrol edip onaylar mısınız?\n\n*Ödeme Detayları:*\n- Alıcı: Canet Karabacak\n- Gönderen Müşteri: ${customerName || "Belirtilmedi"}\n- Ürün: ${product.name}\n- Ödenen Tutar: ${finalPrice.toFixed(2)} TL\n- Ödeme Yöntemi: ${paymentMethod === "papara" ? "Papara" : "IBAN/FAST"}\n- Tarih: ${new Date().toLocaleDateString("tr-TR")} ${new Date().toLocaleTimeString("tr-TR")}\n\nTeşekkürler!`;
+    return `https://wa.me/905059257542?text=${encodeURIComponent(text)}`;
+  };
+
   const [receiptImage, setReceiptImage] = useState<string | null>(null);
   const [receiptMime, setReceiptMime] = useState<string>("");
   const [receiptFileName, setReceiptFileName] = useState<string>("");
@@ -82,23 +89,41 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
 
   const handleReceiptUpload = (file: File) => {
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setReceiptError("Lütfen geçerli bir görsel dosyası (.png, .jpg, .jpeg) yükleyin.");
+    const isImage = file.type.startsWith("image/");
+    const isPdf = file.type === "application/pdf" || file.name.endsWith(".pdf");
+    const isTxt = file.type === "text/plain" || file.name.endsWith(".txt");
+
+    if (!isImage && !isPdf && !isTxt) {
+      setReceiptError("Lütfen geçerli bir görsel (.png, .jpg, .jpeg), PDF (.pdf) veya metin (.txt) dosyası yükleyin.");
       return;
     }
     
     setReceiptError("");
     setReceiptFileName(file.name);
-    setReceiptMime(file.type);
+    
+    const mime = file.type || (isPdf ? "application/pdf" : isTxt ? "text/plain" : "");
+    setReceiptMime(mime);
     
     const reader = new FileReader();
-    reader.onload = (e) => {
-      if (e.target?.result) {
-        const base64Str = (e.target.result as string).split(",")[1];
-        setReceiptImage(base64Str);
-      }
-    };
-    reader.readAsDataURL(file);
+    if (isTxt) {
+      reader.onload = (e) => {
+        if (e.target?.result) {
+          const textContent = e.target.result as string;
+          // Base64 encode the plain text safely
+          const base64Str = btoa(unescape(encodeURIComponent(textContent)));
+          setReceiptImage(base64Str);
+        }
+      };
+      reader.readAsText(file);
+    } else {
+      reader.onload = (e) => {
+        if (e.target?.result) {
+          const base64Str = (e.target.result as string).split(",")[1];
+          setReceiptImage(base64Str);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleVerifyReceiptWithAi = async () => {
@@ -126,9 +151,9 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
 
       const data = await response.json();
       if (response.ok && data.success) {
-        const claimId = "claim-" + Date.now();
+        const claimRef = doc(collection(db, "claims"));
         const claimPayload = {
-          id: claimId,
+          id: claimRef.id,
           userId: currentUserId,
           userEmail: currentUserEmail || "anon@bayiistore.com",
           productId: product.id,
@@ -141,13 +166,15 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
           deliveryContent: product.deliveryContent,
           originalPrice: product.price,
           paidPrice: finalPrice,
-          couponCode: appliedCoupon ? appliedCoupon.code : null
+          couponCode: appliedCoupon ? appliedCoupon.code : null,
+          isConfirmedByUser: false
         };
 
-        await addDoc(collection(db, "claims"), claimPayload);
+        await setDoc(claimRef, claimPayload);
 
-        await addDoc(collection(db, "notifications"), {
-          id: "notif-" + Date.now(),
+        const successNotifRef = doc(collection(db, "notifications"));
+        await setDoc(successNotifRef, {
+          id: successNotifRef.id,
           userId: currentUserId,
           title: "Ödemeniz AI Tarafından Onaylandı!",
           message: `'${product.name}' adlı ürün için yüklediğiniz ödeme dekontu yapay zekamız (Gemini) tarafından başarıyla doğrulandı. Dosyalarınızı indirebilirsiniz.`,
@@ -155,6 +182,24 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
           createdAt: Date.now(),
           readBy: []
         });
+
+        // Add a confirmation notification
+        const confirmNotifRef = doc(collection(db, "notifications"));
+        await setDoc(confirmNotifRef, {
+          id: confirmNotifRef.id,
+          userId: currentUserId,
+          title: "Sipariş Onayı Bekleniyor",
+          message: `'${product.name}' ürününü teslim aldınız. Eğer her şey yolundaysa lütfen siparişi onaylayın. 24 saat içinde onaylanmazsa sistem tarafından otomatik onaylanacaktır.`,
+          type: "order_approval",
+          createdAt: Date.now(),
+          readBy: [],
+          claimId: claimRef.id
+        });
+
+        // Auto open notifications panel
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent("open-notifications"));
+        }, 500);
 
         setPaparaStep("success");
       } else {
@@ -177,9 +222,9 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
     setTimeout(async () => {
       try {
         const finalPrice = getFinalPrice();
-        const claimId = "claim-" + Date.now();
+        const claimRef = doc(collection(db, "claims"));
         const claimPayload = {
-          id: claimId,
+          id: claimRef.id,
           userId: currentUserId,
           userEmail: currentUserEmail || "anon@bayiistore.com",
           productId: product.id,
@@ -192,13 +237,15 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
           deliveryContent: product.deliveryContent,
           originalPrice: product.price,
           paidPrice: finalPrice,
-          couponCode: appliedCoupon ? appliedCoupon.code : null
+          couponCode: appliedCoupon ? appliedCoupon.code : null,
+          isConfirmedByUser: false
         };
         
-        await addDoc(collection(db, "claims"), claimPayload);
+        await setDoc(claimRef, claimPayload);
         
-        await addDoc(collection(db, "notifications"), {
-          id: "notif-" + Date.now(),
+        const infoNotifRef = doc(collection(db, "notifications"));
+        await setDoc(infoNotifRef, {
+          id: infoNotifRef.id,
           userId: currentUserId,
           title: "Ödemeniz İncelemeye Alındı",
           message: `'${product.name}' adlı ürün için yaptığınız ödeme yöneticiler tarafından inceleniyor. Onaylandığında bildirim alacaksınız.`,
@@ -206,6 +253,24 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
           createdAt: Date.now(),
           readBy: []
         });
+
+        // Add a confirmation notification (for manual)
+        const confirmNotifRef = doc(collection(db, "notifications"));
+        await setDoc(confirmNotifRef, {
+          id: confirmNotifRef.id,
+          userId: currentUserId,
+          title: "Sipariş Onayı Bekleniyor",
+          message: `'${product.name}' ürününü teslim aldınız. Eğer her şey yolundaysa lütfen siparişi onaylayın. 24 saat içinde onaylanmazsa sistem tarafından otomatik onaylanacaktır.`,
+          type: "order_approval",
+          createdAt: Date.now(),
+          readBy: [],
+          claimId: claimRef.id
+        });
+
+        // Auto open notifications panel
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent("open-notifications"));
+        }, 500);
 
         // We show a slightly different success screen
         setPaparaStep("success");
@@ -694,7 +759,7 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
                               <input 
                                 id="receipt-file-input"
                                 type="file"
-                                accept="image/*"
+                                accept="image/*,application/pdf,text/plain"
                                 className="hidden"
                                 onChange={(e) => {
                                   if (e.target.files && e.target.files[0]) {
@@ -714,7 +779,7 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
                                     {receiptFileName || "dekont.png"}
                                   </p>
                                   <p className="text-[10px] text-zinc-400">
-                                    Görsel başarıyla seçildi. Değiştirmek için tekrar tıklayın veya sürükleyin.
+                                    Belge/Dekont başarıyla seçildi. Değiştirmek için tekrar tıklayın veya sürükleyin.
                                   </p>
                                 </div>
                               ) : (
@@ -725,10 +790,10 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
                                     </div>
                                   </div>
                                   <p className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
-                                    Dekont Görseli Yükle
+                                    Dekont / Belge Yükle
                                   </p>
-                                  <p className="text-[10px] text-zinc-400 leading-normal max-w-[200px] mx-auto">
-                                    Resmi buraya sürükleyin ya da tıklayıp seçin (.png, .jpg, .jpeg)
+                                  <p className="text-[10px] text-zinc-400 leading-normal max-w-[240px] mx-auto">
+                                    Resim, PDF veya Metin dosyasını buraya sürükleyin ya da seçin (.png, .jpg, .jpeg, .pdf, .txt)
                                   </p>
                                 </div>
                               )}
@@ -761,15 +826,27 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
                             id="confirm-payment-btn"
                             type="button"
                             onClick={handleCompletePaparaPayment}
-                            className="w-full bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white font-sans font-bold py-3 px-4 rounded-2xl transition text-xs cursor-pointer shadow-md flex items-center justify-center gap-2"
+                            className="w-full bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-600 hover:to-blue-700 text-white font-sans font-bold py-3 px-4 rounded-2xl transition text-xs cursor-pointer shadow-md flex items-center justify-center gap-2"
                           >
                             Manuel Kontrole Gönder (Sıra Bekletir)
                           </button>
+
+                          <a
+                            href={getWhatsAppMessageUrl()}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white font-sans font-bold py-3 px-4 rounded-2xl transition text-xs cursor-pointer shadow-md flex items-center justify-center gap-2"
+                            title="Tüm bilgileri otomatik olarak WhatsApp üzerinden ilet"
+                          >
+                            <MessageCircle className="w-4 h-4 text-white" />
+                            WhatsApp ile Bildir & Hızlı Onay Al
+                          </a>
+
                           <button
                             id="cancel-payment-btn"
                             type="button"
                             onClick={() => setPaparaStep("none")}
-                            className="w-full text-center text-[10px] font-bold text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition cursor-pointer"
+                            className="w-full text-center text-[10px] font-bold text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition cursor-pointer pt-1"
                           >
                             Ödemeyi İptal Et
                           </button>
@@ -882,55 +959,106 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
                         Müşteri Yorumları & Değerlendirmeler
                       </h4>
 
-                      {/* Submit Comment Form */}
-                      <form id={`comment-form-${product.id}`} onSubmit={handleAddComment} className="bg-zinc-50 dark:bg-zinc-950 p-4 rounded-2xl border border-zinc-100 dark:border-zinc-800/80 mb-6 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">Bu İlana Puan Ver:</span>
-                          <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 border border-zinc-150 dark:border-zinc-700 px-3 py-1 rounded-xl">
-                            <span className="text-xs font-extrabold text-amber-500">{newRating} / 10</span>
-                            <input
-                              id={`rating-slider-${product.id}`}
-                              type="range"
-                              min="1"
-                              max="10"
-                              value={newRating}
-                              onChange={(e) => setNewRating(parseInt(e.target.value))}
-                              className="w-20 accent-amber-500"
+                      {/* Method Selector Tabs */}
+                      <div className="flex gap-2 mb-4 bg-zinc-100 dark:bg-zinc-900/60 p-1 rounded-xl">
+                        <button
+                          type="button"
+                          onClick={() => setCommentMethod("itemsatis")}
+                          className={`flex-1 py-2 text-center text-xs font-bold rounded-lg transition duration-150 cursor-pointer ${commentMethod === "itemsatis" ? "bg-white dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400 shadow-sm" : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400"}`}
+                        >
+                          1. ItemSatış Değerlendirmesi
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCommentMethod("bayiistore")}
+                          className={`flex-1 py-2 text-center text-xs font-bold rounded-lg transition duration-150 cursor-pointer ${commentMethod === "bayiistore" ? "bg-white dark:bg-zinc-800 text-indigo-600 dark:text-indigo-400 shadow-sm" : "text-zinc-500 hover:text-zinc-700 dark:text-zinc-400"}`}
+                        >
+                          2. BayiiStore Değerlendirmesi
+                        </button>
+                      </div>
+
+                      {commentMethod === "itemsatis" ? (
+                        <div className="bg-gradient-to-br from-amber-50/50 to-orange-50/30 dark:from-zinc-900/40 dark:to-orange-950/10 p-5 rounded-2xl border border-orange-100/50 dark:border-orange-950/20 mb-6 space-y-4">
+                          <div className="flex items-start gap-3">
+                            <div className="p-2 bg-[#ff5e00]/10 rounded-xl text-[#ff5e00] flex-shrink-0 mt-0.5">
+                              <Star className="w-5 h-5 fill-current" />
+                            </div>
+                            <div>
+                              <h5 className="text-sm font-bold text-zinc-800 dark:text-zinc-200">ItemSatış Değerlendirmesi</h5>
+                              <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed mt-1">
+                                Satın aldığınız bu ürünün siparişini ItemSatış üzerinden onaylayıp 5 yıldızlı değerlendirme bırakarak bizlere destek olabilirsiniz.
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="bg-white/80 dark:bg-zinc-900/40 p-3 rounded-xl border border-orange-100/30 dark:border-zinc-850/80 text-[11px] text-zinc-500 dark:text-zinc-400 space-y-1.5">
+                            <p className="font-bold text-orange-600 dark:text-orange-400">📝 Değerlendirme Adımları:</p>
+                            <p>1. <span className="font-bold text-zinc-700 dark:text-zinc-300">"ItemSatış Profiline Git"</span> butonuna tıklayın.</p>
+                            <p>2. Profilinizdeki <span className="font-bold text-zinc-700 dark:text-zinc-300">"Satın Aldıklarım"</span> sayfasına girip bu ilanı bulun.</p>
+                            <p>3. Satışı onaylayın ve <span className="font-bold text-zinc-700 dark:text-zinc-300">"5 Yıldız ⭐"</span> vererek güzel yorumunuzu yazın.</p>
+                          </div>
+
+                          <a
+                            href="https://www.itemsatis.com"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full inline-flex items-center justify-center gap-2 bg-[#ff5e00] hover:bg-[#e05300] text-white font-sans font-extrabold py-3 px-4 rounded-xl text-xs transition duration-150 shadow-md cursor-pointer"
+                          >
+                            <Star className="w-4 h-4 fill-current" />
+                            ItemSatış Profiline Git & Değerlendir ↗
+                          </a>
+                        </div>
+                      ) : (
+                        /* Submit Comment Form */
+                        <form id={`comment-form-${product.id}`} onSubmit={handleAddComment} className="bg-zinc-50 dark:bg-zinc-950 p-4 rounded-2xl border border-zinc-100 dark:border-zinc-800/80 mb-6 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">Bu İlana Puan Ver:</span>
+                            <div className="flex items-center gap-1 bg-white dark:bg-zinc-800 border border-zinc-150 dark:border-zinc-700 px-3 py-1 rounded-xl">
+                              <span className="text-xs font-extrabold text-amber-500">{newRating} / 10</span>
+                              <input
+                                id={`rating-slider-${product.id}`}
+                                type="range"
+                                min="1"
+                                max="10"
+                                value={newRating}
+                                onChange={(e) => setNewRating(parseInt(e.target.value))}
+                                className="w-20 accent-amber-500"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="relative">
+                            <textarea
+                              id={`comment-textarea-${product.id}`}
+                              required
+                              rows={2}
+                              value={newComment}
+                              onChange={(e) => setNewComment(e.target.value)}
+                              placeholder="Bu ürünü deneyimlediniz mi? Diğer alıcılara rehberlik edecek dürüst bir yorum yazın..."
+                              className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl p-3 text-xs text-zinc-800 dark:text-white placeholder-zinc-400 outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition resize-none"
                             />
                           </div>
-                        </div>
 
-                        <div className="relative">
-                          <textarea
-                            id={`comment-textarea-${product.id}`}
-                            required
-                            rows={2}
-                            value={newComment}
-                            onChange={(e) => setNewComment(e.target.value)}
-                            placeholder="Bu ürünü deneyimlediniz mi? Diğer alıcılara rehberlik edecek dürüst bir yorum yazın..."
-                            className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl p-3 text-xs text-zinc-800 dark:text-white placeholder-zinc-400 outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition resize-none"
-                          />
-                        </div>
+                          {commentError && (
+                            <div className="flex items-center gap-1.5 text-xs text-rose-500">
+                              <AlertCircle className="w-4 h-4" />
+                              <span>{commentError}</span>
+                            </div>
+                          )}
 
-                        {commentError && (
-                          <div className="flex items-center gap-1.5 text-xs text-rose-500">
-                            <AlertCircle className="w-4 h-4" />
-                            <span>{commentError}</span>
+                          <div className="flex justify-end">
+                            <button
+                              id={`comment-submit-btn-${product.id}`}
+                              type="submit"
+                              disabled={isSubmittingComment || !newComment.trim()}
+                              className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white font-sans font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+                            >
+                              {isSubmittingComment ? "Gönderiliyor..." : "Yorumu Gönder"}
+                              <Send className="w-3 h-3" />
+                            </button>
                           </div>
-                        )}
-
-                        <div className="flex justify-end">
-                          <button
-                            id={`comment-submit-btn-${product.id}`}
-                            type="submit"
-                            disabled={isSubmittingComment || !newComment.trim()}
-                            className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-zinc-200 dark:disabled:bg-zinc-800 text-white font-sans font-bold text-xs px-4 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
-                          >
-                            {isSubmittingComment ? "Gönderiliyor..." : "Yorumu Gönder"}
-                            <Send className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </form>
+                        </form>
+                      )}
 
                       {/* Comments List */}
                       <div id={`comments-list-${product.id}`} className="space-y-4 max-h-56 overflow-y-auto pr-1">

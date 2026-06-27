@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { auth, db } from "./firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { collection, query, where, onSnapshot, orderBy, doc, getDoc } from "firebase/firestore";
+import { collection, query, where, onSnapshot, orderBy, doc, getDoc, updateDoc } from "firebase/firestore";
 import { seedInitialData } from "./utils/seeder";
 import Navbar from "./components/Navbar";
 import ProductList from "./components/ProductList";
@@ -23,6 +23,35 @@ export default function App() {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
   const [userRole, setUserRole] = useState<'admin' | 'user'>('user');
+
+  // Auto-approval logic for orders
+  useEffect(() => {
+    const checkAutoApproval = async () => {
+      const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
+      // Logic: If not confirmed and older than 24h
+      const pendingClaims = userClaims.filter(c => !c.isConfirmedByUser && c.claimedAt < twentyFourHoursAgo);
+
+      for (const claim of pendingClaims) {
+        try {
+          const claimRef = doc(db, "claims", claim.id);
+          await updateDoc(claimRef, {
+            isConfirmedByUser: true,
+            confirmedAt: Date.now(),
+            autoConfirmed: true
+          });
+        } catch (err) {
+          console.error("Auto approval failed for claim:", claim.id, err);
+        }
+      }
+    };
+
+    if (userClaims.length > 0) {
+      const interval = setInterval(checkAutoApproval, 60000); // Check every minute while app is open
+      checkAutoApproval();
+      return () => clearInterval(interval);
+    }
+  }, [userClaims]);
+
   const [userProfile, setUserProfile] = useState<any>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
@@ -128,14 +157,34 @@ export default function App() {
         setIsAdminMode={setIsAdminMode}
         isDarkMode={isDarkMode}
         setIsDarkMode={setIsDarkMode}
+        userClaims={userClaims}
       />
 
       {/* Main Body */}
       <main className="flex-grow max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-6">
         <AnimatePresence mode="wait">
           
-          {/* MAINTENANCE MODE CHECK */}
-          {isMaintenanceMode && userRole !== 'admin' && !isAdminMode ? (
+          {/* MANDATORY AUTH CHECK */}
+          {!user && !isAuthLoading ? (
+            <motion.div
+              key="auth-required"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="flex flex-col items-center justify-center min-h-[60vh] text-center"
+            >
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-10 rounded-3xl shadow-xl max-w-md w-full">
+                <LockKeyhole className="w-16 h-16 text-indigo-500 mx-auto mb-6" />
+                <h2 className="text-2xl font-black text-zinc-800 dark:text-white mb-4">Giriş Yapmalısınız</h2>
+                <p className="text-zinc-500 dark:text-zinc-400 text-sm leading-relaxed mb-6">
+                  BayiiStore kataloğuna erişmek ve ürün satın almak için lütfen giriş yapın veya kayıt olun.
+                </p>
+                <div className="space-y-3">
+                  <p className="text-[10px] text-zinc-400 uppercase tracking-widest font-bold">Lütfen Yukarıdaki "Giriş Yap" Butonunu Kullanın</p>
+                </div>
+              </div>
+            </motion.div>
+          ) : isMaintenanceMode && userRole !== 'admin' && !isAdminMode ? (
             <motion.div
               key="maintenance"
               initial={{ opacity: 0 }}

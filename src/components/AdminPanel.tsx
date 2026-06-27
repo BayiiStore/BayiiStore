@@ -15,6 +15,7 @@ import {
   ShoppingCart,
   Loader2,
   Check,
+  CheckCircle2,
   X,
   ToggleLeft,
   ToggleRight,
@@ -1925,6 +1926,7 @@ export default function AdminPanel() {
                       <th className="px-4 py-3 font-bold uppercase tracking-wider">Ödeme / Kupon</th>
                       <th className="px-4 py-3 font-bold uppercase tracking-wider">Dekont Görseli</th>
                       <th className="px-4 py-3 font-bold uppercase tracking-wider">Tarih</th>
+                      <th className="px-4 py-3 font-bold uppercase tracking-wider">Teslim Durumu</th>
                       <th className="px-4 py-3 font-bold uppercase tracking-wider text-right">İşlem</th>
                     </tr>
                   </thead>
@@ -1972,6 +1974,28 @@ export default function AdminPanel() {
                           )}
                         </td>
                         <td className="px-4 py-3">{new Date(c.claimedAt).toLocaleString("tr-TR")}</td>
+                        <td className="px-4 py-3">
+                          {c.isConfirmedByUser ? (
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold flex items-center gap-1 w-fit ${c.autoConfirmed ? 'bg-amber-50 text-amber-600 dark:bg-amber-950/20 dark:text-amber-400' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/20 dark:text-emerald-400'}`}>
+                              {c.autoConfirmed ? (
+                                <>
+                                  <Clock className="w-3 h-3" />
+                                  Oto Onaylandı
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 className="w-3 h-3" />
+                                  Müşteri Onayladı
+                                </>
+                              )}
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-zinc-100 text-zinc-400 dark:bg-zinc-800/50 dark:text-zinc-500 rounded-full text-[9px] font-bold flex items-center gap-1 w-fit">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              Bekleniyor
+                            </span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-right">
                           {c.stockCode === "MANUAL_PENDING" ? (
                             <button

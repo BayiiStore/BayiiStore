@@ -218,9 +218,19 @@ app.post("/api/gemini/verify-dekont", async (req, res) => {
       }
     `;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
-      contents: [
+    let contentsPayload: any[] = [];
+    if (mimeType === "text/plain" || mimeType.startsWith("text/")) {
+      const decodedText = Buffer.from(image, "base64").toString("utf-8");
+      contentsPayload = [
+        {
+          text: `Aşağıda müşterinin yüklediği banka transfer/ödeme dekont belgesinin METİN içeriği yer almaktadır:\n\n---\n${decodedText}\n---\n\nBu metin belgesini inceleyerek doğrulamayı gerçekleştir.`
+        },
+        {
+          text: prompt
+        }
+      ];
+    } else {
+      contentsPayload = [
         {
           inlineData: {
             data: image,
@@ -230,7 +240,12 @@ app.post("/api/gemini/verify-dekont", async (req, res) => {
         {
           text: prompt
         }
-      ],
+      ];
+    }
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: contentsPayload,
       config: {
         responseMimeType: "application/json"
       }
