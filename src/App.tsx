@@ -11,7 +11,9 @@ import SupportForm from "./components/SupportForm";
 import SupportBanner from "./components/SupportBanner";
 import AiAssistant from "./components/AiAssistant";
 import FaqSection from "./components/FaqSection";
-import { Claim } from "./types";
+import OrderLibrary from "./components/OrderLibrary";
+import SupportChatWidget from "./components/SupportChatWidget";
+import { Claim, UserProfile } from "./types";
 import { ShieldCheck, KeyRound, ArrowRight, Download, Play, FileText, Sparkles, Clock, LockKeyhole, Laptop, ExternalLink, HelpCircle, Copy, Check } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -143,6 +145,24 @@ export default function App() {
   // Mock User UID/Email if guest to let them use the app
   const activeUserId = user ? user.uid : "anonymous_client";
   const activeUserEmail = user ? user.email || "anon@bayiistore.com" : "misafir@bayiistore.com";
+
+  // Calculate Loyalty Tiers on the fly
+  const successfulClaims = userClaims.filter(
+    (c) => c.status === "approved" || c.stockCode !== "MANUAL_PENDING"
+  );
+  const totalSpent = successfulClaims.reduce(
+    (sum, c) => sum + (c.paidPrice || c.originalPrice || 0), 0
+  );
+
+  let loyaltyTier: "Bronz" | "Gümüş" | "Altın" = "Bronz";
+  let tierDiscountPercent = 0;
+  if (totalSpent >= 1500) {
+    loyaltyTier = "Altın";
+    tierDiscountPercent = 5;
+  } else if (totalSpent >= 500) {
+    loyaltyTier = "Gümüş";
+    tierDiscountPercent = 2;
+  }
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-800 dark:text-zinc-100 flex flex-col transition-colors duration-150 selection:bg-indigo-500/30">
@@ -298,151 +318,14 @@ export default function App() {
                   />
                 </div>
 
-                {/* Unlocked Claims Dashboard List */}
-                <div id="unlocked-dashboard" className="lg:col-span-7 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 shadow-md flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between mb-4 pb-3 border-b border-zinc-100 dark:border-zinc-800">
-                      <div className="flex items-center gap-2.5">
-                        <div className="p-2 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-xl">
-                          <LockKeyhole className="w-4.5 h-4.5" />
-                        </div>
-                        <div>
-                          <h3 className="font-sans font-bold text-sm text-zinc-800 dark:text-white">Dosyalarım ve Lisanslarım</h3>
-                          <p className="text-[11px] text-zinc-400 dark:text-zinc-500">Satın aldığınız ve başarılı doğruladığınız ürünlerin teslimat listesi.</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {user && (
-                      <div className="mb-4 p-4 rounded-2xl bg-zinc-50 dark:bg-zinc-950 border border-zinc-150 dark:border-zinc-800/60 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-md flex-shrink-0">
-                            {userProfile?.bankFullName ? userProfile.bankFullName.charAt(0).toUpperCase() : (user.email ? user.email.charAt(0).toUpperCase() : "?")}
-                          </div>
-                          <div>
-                            <p className="text-xs font-sans font-black text-zinc-800 dark:text-white leading-tight">
-                              {userProfile?.bankFullName || "Kullanıcı"}
-                            </p>
-                            <p className="text-[10px] text-zinc-400 font-mono leading-none mt-1">
-                              {user.email}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          {(() => {
-                            let badge = { text: "Yeni Üye 🌱", class: "bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500" };
-                            if (userClaims.length >= 5) badge = { text: "Seçkin Elmas Üye 💎", class: "bg-indigo-500/10 border-indigo-500/30 text-indigo-400 font-extrabold animate-pulse" };
-                            else if (userClaims.length >= 3) badge = { text: "Altın Üye 🥇", class: "bg-amber-500/10 border-amber-500/30 text-amber-400 font-bold" };
-                            else if (userClaims.length >= 1) badge = { text: "Gümüş Üye 🥈", class: "bg-slate-400/10 border-slate-400/30 text-slate-400 font-bold" };
-                            return (
-                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] rounded-full border ${badge.class} uppercase tracking-wider`}>
-                                {badge.text}
-                              </span>
-                            );
-                          })()}
-                          <span className="px-2.5 py-1 text-[10px] bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-150 dark:border-indigo-900 text-indigo-600 dark:text-indigo-400 font-sans font-black rounded-full uppercase tracking-wider">
-                            {userClaims.length} TESLİMAT
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {!user ? (
-                      <div className="text-center py-8">
-                        <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-4">
-                          Sahip olduğunuz teslimatların kalıcı olarak saklanması ve dosyalarınızı dilediğiniz an tekrar indirmek için lütfen giriş yapın.
-                        </p>
-                      </div>
-                    ) : userClaims.length === 0 ? (
-                      <div className="text-center py-10">
-                        <p className="text-xs text-zinc-400 dark:text-zinc-500 leading-normal">
-                          Henüz bu hesapla doğrulanmış bir e-pin bulunmuyor. <br />
-                          Soldaki doğrulama alanından ilk kodunuzu onaylayabilirsiniz.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="space-y-3.5 max-h-64 overflow-y-auto pr-1">
-                        {userClaims.map((claim) => (
-                          <div id={`claim-row-${claim.id}`} key={claim.id} className="bg-zinc-50 dark:bg-zinc-950 p-3.5 rounded-2xl border border-zinc-150 dark:border-zinc-800 flex flex-col gap-3">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <h4 className="text-xs font-bold text-zinc-800 dark:text-zinc-100">{claim.productName}</h4>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  <p className="text-[10px] text-zinc-400 font-mono">Kod: {claim.stockCode}</p>
-                                  <button
-                                    onClick={() => handleCopyCode(claim.stockCode)}
-                                    className="p-1 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-md transition text-zinc-500"
-                                    title="Kodu Kopyala"
-                                  >
-                                    {copiedCode === claim.stockCode ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                                  </button>
-                                </div>
-                              </div>
-                              <span className="text-[9px] text-zinc-400 flex items-center gap-1 font-mono">
-                                <Clock className="w-3 h-3" />
-                                {new Date(claim.claimedAt).toLocaleDateString("tr-TR")}
-                              </span>
-                            </div>
-
-                            {/* Download action links */}
-                            <div className="flex flex-wrap gap-2 pt-1 border-t border-zinc-100 dark:border-zinc-800/80">
-                              {claim.deliveryContent.apkUrl && (
-                                <a
-                                  href={claim.deliveryContent.apkUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-1.5 px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white font-sans font-bold text-[10px] rounded-lg transition"
-                                >
-                                  <Download className="w-3.5 h-3.5" />
-                                  APK İndir
-                                </a>
-                              )}
-                              {claim.deliveryContent.zipUrl && (
-                                <a
-                                  href={claim.deliveryContent.zipUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-1.5 px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-sans font-bold text-[10px] rounded-lg transition"
-                                >
-                                  <Download className="w-3.5 h-3.5" />
-                                  ZIP İndir
-                                </a>
-                              )}
-                              {claim.deliveryContent.tutorialVideo && (
-                                <a
-                                  href={claim.deliveryContent.tutorialVideo}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-1.5 px-2.5 py-1 bg-red-600 hover:bg-red-700 text-white font-sans font-bold text-[10px] rounded-lg transition"
-                                >
-                                  <Play className="w-3.5 h-3.5" />
-                                  Kurulum Videosu
-                                </a>
-                              )}
-                              {claim.deliveryContent.textContent && (
-                                <button
-                                  onClick={() => alert(`Lisans & Metin Bilgisi:\n\n${claim.deliveryContent.textContent}`)}
-                                  className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-600 hover:bg-zinc-700 text-white font-sans font-bold text-[10px] rounded-lg transition cursor-pointer"
-                                >
-                                  <FileText className="w-3.5 h-3.5" />
-                                  Metni Göster
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mt-4 pt-3.5 border-t border-zinc-100 dark:border-zinc-800 flex justify-between items-center text-[10px] text-zinc-400 font-semibold uppercase tracking-wider">
-                    <span>GÜVENLİK STANDARTI</span>
-                    <span className="text-indigo-500 flex items-center gap-1">
-                      <ShieldCheck className="w-4 h-4" />
-                      SECURE GUARD ACTIVE
-                    </span>
-                  </div>
-                </div>
+                {/* Unlocked Claims Dashboard List / Order Library */}
+                <OrderLibrary
+                  user={user}
+                  userProfile={userProfile}
+                  userClaims={userClaims}
+                  copiedCode={copiedCode}
+                  handleCopyCode={handleCopyCode}
+                />
 
               </div>
 
@@ -455,6 +338,8 @@ export default function App() {
                 <ProductList
                   currentUserId={activeUserId}
                   currentUserEmail={activeUserEmail}
+                  loyaltyTier={loyaltyTier}
+                  tierDiscountPercent={tierDiscountPercent}
                 />
               </div>
 
@@ -486,6 +371,13 @@ export default function App() {
 
       {/* Support and Payment footer */}
       <SupportBanner />
+
+      {/* Floating support chat for logged in users */}
+      <SupportChatWidget
+        currentUserId={activeUserId}
+        currentUserEmail={activeUserEmail}
+        userProfile={userProfile}
+      />
     </div>
   );
 }

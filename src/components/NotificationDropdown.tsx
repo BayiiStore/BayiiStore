@@ -69,6 +69,15 @@ export default function NotificationDropdown({ currentUserId, userClaims }: Noti
     try {
       for (const n of notifications) {
         const isRead = n.readBy?.includes(currentUserId);
+        
+        // Skip marking order_approval as read if not yet confirmed by the user
+        if (n.type === "order_approval" && n.claimId) {
+          const claim = userClaims.find(c => c.id === n.claimId);
+          if (claim && !claim.isConfirmedByUser) {
+            continue;
+          }
+        }
+
         if (!isRead && (n.userId === "all" || n.userId === currentUserId)) {
           await handleMarkAsRead(n.id);
         }
@@ -172,12 +181,20 @@ export default function NotificationDropdown({ currentUserId, userClaims }: Noti
 
               {/* List */}
               <div id="notification-list" className="max-h-80 overflow-y-auto divide-y divide-zinc-100 dark:divide-zinc-800">
-                {notifications.length === 0 ? (
-                  <div className="p-8 text-center">
-                    <p className="text-sm text-zinc-400 dark:text-zinc-500">Henüz bildirim bulunmuyor.</p>
-                  </div>
-                ) : (
-                  notifications.map((n) => {
+                {(() => {
+                  const userNotifications = notifications.filter(
+                    (n) => n.userId === "all" || n.userId === currentUserId
+                  );
+                  
+                  if (userNotifications.length === 0) {
+                    return (
+                      <div className="p-8 text-center">
+                        <p className="text-sm text-zinc-400 dark:text-zinc-500">Henüz bildirim bulunmuyor.</p>
+                      </div>
+                    );
+                  }
+
+                  return userNotifications.map((n) => {
                     const isRead = n.readBy?.includes(currentUserId);
                     return (
                       <div
@@ -238,8 +255,8 @@ export default function NotificationDropdown({ currentUserId, userClaims }: Noti
                         </div>
                       </div>
                     );
-                  })
-                )}
+                  });
+                })()}
               </div>
             </motion.div>
           </>

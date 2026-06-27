@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { db } from "../firebase";
+import { triggerProductAlerts } from "../utils/alerts";
+import AdminChatManager from "./AdminChatManager";
 import { collection, addDoc, getDocs, doc, deleteDoc, updateDoc, writeBatch, query, orderBy, onSnapshot, where, setDoc } from "firebase/firestore";
 import { Product, StockCode, Claim, Comment, Notification, Category, SupportRequest } from "../types";
 import {
@@ -489,6 +491,10 @@ export default function AdminPanel() {
         const querySnap = await getDocs(q);
         if (!querySnap.empty) {
           const docId = querySnap.docs[0].id;
+          const oldData = querySnap.docs[0].data();
+          const oldPrice = oldData.price || 0;
+          const oldStockStatus = oldData.stockStatus || "yok";
+
           await updateDoc(doc(db, "products", docId), {
             name: pName,
             category: pCategory,
@@ -505,6 +511,10 @@ export default function AdminPanel() {
               textContent: pTextContent || ""
             }
           });
+
+          // Trigger stock/price drop alerts asynchronously
+          await triggerProductAlerts(editingProductId, pName, oldPrice, priceNum, oldStockStatus, pStockStatus);
+
           setProductSuccessMsg("Ürün başarıyla güncellendi!");
           setEditingProductId(null);
         } else {
@@ -744,7 +754,7 @@ export default function AdminPanel() {
 
     try {
       const notifRef = doc(collection(db, "notifications"));
-      await addDoc(collection(db, "notifications"), {
+      await setDoc(notifRef, {
         id: notifRef.id,
         userId: "all",
         title: notifTitle.trim(),
@@ -2005,8 +2015,9 @@ export default function AdminPanel() {
                                   stockCode: newCode,
                                   status: 'approved'
                                 });
-                                await addDoc(collection(db, "notifications"), {
-                                  id: "notif-" + Date.now(),
+                                const notifId = "notif-" + Date.now();
+                                await setDoc(doc(db, "notifications", notifId), {
+                                  id: notifId,
                                   userId: c.userId,
                                   title: "Papara Ödemeniz Onaylandı!",
                                   message: `'${c.productName}' adlı ürün için yaptığınız ödeme yöneticiler tarafından onaylandı. Teslimatınız sağlandı.`,
@@ -2093,10 +2104,19 @@ export default function AdminPanel() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="space-y-8"
+              className="space-y-12"
             >
-              <div>
-                <h3 className="font-sans font-black text-lg text-zinc-800 dark:text-white">Gelen Destek Talepleri</h3>
+              {/* Real-time Live Support Chat Manager */}
+              <div className="space-y-3">
+                <div>
+                  <h3 className="font-sans font-black text-lg text-zinc-800 dark:text-white">Canlı Destek Odaları</h3>
+                  <p className="text-xs text-zinc-400 dark:text-zinc-500">Müşterilerinizle gerçek zamanlı olarak anlık sohbet edin ve tüm sorularını saniyeler içinde cevaplayın.</p>
+                </div>
+                <AdminChatManager />
+              </div>
+
+              <div className="border-t border-zinc-150 dark:border-zinc-800/80 pt-8">
+                <h3 className="font-sans font-black text-lg text-zinc-800 dark:text-white">Gelen Destek Talepleri (Biletler)</h3>
                 <p className="text-xs text-zinc-400 dark:text-zinc-500">Müşterilerin şikayet ve destek bildirimlerini buradan inceleyip durumunu güncelleyebilirsiniz.</p>
               </div>
 

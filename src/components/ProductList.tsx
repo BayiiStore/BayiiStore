@@ -8,9 +8,16 @@ import { Search, SlidersHorizontal, PackageOpen, Sparkles } from "lucide-react";
 interface ProductListProps {
   currentUserId: string;
   currentUserEmail: string;
+  loyaltyTier: "Bronz" | "Gümüş" | "Altın";
+  tierDiscountPercent: number;
 }
 
-export default function ProductList({ currentUserId, currentUserEmail }: ProductListProps) {
+export default function ProductList({ 
+  currentUserId, 
+  currentUserEmail,
+  loyaltyTier,
+  tierDiscountPercent
+}: ProductListProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [dbCategories, setDbCategories] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -138,6 +145,8 @@ export default function ProductList({ currentUserId, currentUserEmail }: Product
               product={p}
               currentUserId={currentUserId}
               currentUserEmail={currentUserEmail}
+              loyaltyTier={loyaltyTier}
+              tierDiscountPercent={tierDiscountPercent}
             />
           ))}
         </div>

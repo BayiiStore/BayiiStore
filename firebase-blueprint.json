@@ -74,9 +74,10 @@
         "userId": { "type": "string" },
         "title": { "type": "string" },
         "message": { "type": "string" },
-        "type": { "type": "string", "enum": ["info", "success", "alert"] },
+        "type": { "type": "string", "enum": ["info", "success", "alert", "order_approval"] },
         "createdAt": { "type": "number" },
-        "readBy": { "type": "array" }
+        "readBy": { "type": "array" },
+        "claimId": { "type": "string" }
       },
       "required": ["id", "userId", "title", "message", "type", "createdAt"]
     },
@@ -104,6 +105,49 @@
         "status": { "type": "string", "enum": ["bekliyor", "cozuldu"] }
       },
       "required": ["id", "name", "contact", "message", "createdAt", "status"]
+    },
+    "Alert": {
+      "title": "Alert",
+      "description": "A notification alert set by a user for a product's price drop or stock status change",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "productId": { "type": "string" },
+        "type": { "type": "string", "enum": ["stock", "price"] },
+        "targetPrice": { "type": "number" },
+        "createdAt": { "type": "number" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "userId", "productId", "type", "createdAt", "active"]
+    },
+    "ChatSession": {
+      "title": "ChatSession",
+      "description": "A support chat session between user and admin",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "userName": { "type": "string" },
+        "lastMessage": { "type": "string" },
+        "lastActive": { "type": "number" },
+        "unreadByAdmin": { "type": "boolean" },
+        "unreadByUser": { "type": "boolean" }
+      },
+      "required": ["userId", "userEmail", "userName", "lastMessage", "lastActive", "unreadByAdmin", "unreadByUser"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "A single message in a support chat",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderId": { "type": "string" },
+        "senderEmail": { "type": "string" },
+        "content": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "senderId", "senderEmail", "content", "createdAt"]
     }
   },
   "firestore": {
@@ -134,6 +178,18 @@
     "support_requests": {
       "schema": { "$ref": "#/entities/SupportRequest" },
       "description": "Support tickets raised by visitors"
+    },
+    "alerts": {
+      "schema": { "$ref": "#/entities/Alert" },
+      "description": "User stock and price drop notifications"
+    },
+    "chats": {
+      "schema": { "$ref": "#/entities/ChatSession" },
+      "description": "Direct support live chats"
+    },
+    "chats/{userId}/messages": {
+      "schema": { "$ref": "#/entities/ChatMessage" },
+      "description": "Messages inside a support live chat"
     }
   }
 }

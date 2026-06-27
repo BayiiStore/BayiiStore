@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Product, Comment } from "../types";
-import { Star, MessageSquare, ShieldAlert, ShoppingBag, Send, AlertCircle, Sparkles, ArrowLeft, Smartphone, CreditCard, Check, Copy, Loader2, CheckCircle2, MessageCircle } from "lucide-react";
+import { Product, Comment, Alert } from "../types";
+import { Star, MessageSquare, ShieldAlert, ShoppingBag, Send, AlertCircle, Sparkles, ArrowLeft, Smartphone, CreditCard, Check, Copy, Loader2, CheckCircle2, MessageCircle, Bell, BellRing } from "lucide-react";
 import { collection, query, where, getDocs, addDoc, doc, updateDoc, orderBy, onSnapshot, setDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import StockVerifier from "./StockVerifier";
@@ -10,10 +10,18 @@ interface ProductCardProps {
   product: Product;
   currentUserId: string;
   currentUserEmail: string;
+  loyaltyTier?: "Bronz" | "Gümüş" | "Altın";
+  tierDiscountPercent?: number;
   key?: string;
 }
 
-export default function ProductCard({ product, currentUserId, currentUserEmail }: ProductCardProps) {
+export default function ProductCard({ 
+  product, 
+  currentUserId, 
+  currentUserEmail,
+  loyaltyTier = "Bronz",
+  tierDiscountPercent = 0
+}: ProductCardProps) {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState("");
@@ -34,6 +42,72 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
   const [isCheckingCoupon, setIsCheckingCoupon] = useState(false);
   const [couponError, setCouponError] = useState("");
   const [couponSuccess, setCouponSuccess] = useState("");
+
+  // Stock & Price Alert states
+  const [activeStockAlert, setActiveStockAlert] = useState<any>(null);
+  const [activePriceAlert, setActivePriceAlert] = useState<any>(null);
+
+  useEffect(() => {
+    if (!currentUserId || currentUserId === "anonymous_client") return;
+
+    const q = query(
+      collection(db, "alerts"),
+      where("userId", "==", currentUserId),
+      where("productId", "==", product.id),
+      where("active", "==", true)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      let stockAlert = null;
+      let priceAlert = null;
+      snapshot.forEach((doc) => {
+        const data = { id: doc.id, ...doc.data() } as Alert;
+        if (data.type === "stock") {
+          stockAlert = data;
+        } else if (data.type === "price") {
+          priceAlert = data;
+        }
+      });
+      setActiveStockAlert(stockAlert);
+      setActivePriceAlert(priceAlert);
+    });
+
+    return () => unsubscribe();
+  }, [currentUserId, product.id]);
+
+  const handleToggleAlert = async (type: "stock" | "price") => {
+    if (!currentUserId || currentUserId === "anonymous_client") {
+      alert("Bildirim oluşturmak için lütfen önce giriş yapın.");
+      return;
+    }
+
+    const currentAlert = type === "stock" ? activeStockAlert : activePriceAlert;
+
+    if (currentAlert) {
+      try {
+        await updateDoc(doc(db, "alerts", currentAlert.id), {
+          active: false
+        });
+      } catch (err) {
+        console.error("Error deactivating alert:", err);
+      }
+    } else {
+      try {
+        const alertRef = doc(collection(db, "alerts"));
+        await setDoc(alertRef, {
+          id: alertRef.id,
+          userId: currentUserId,
+          productId: product.id,
+          type: type,
+          targetPrice: product.price,
+          createdAt: Date.now(),
+          active: true
+        });
+      } catch (err) {
+        console.error("Error creating alert:", err);
+      }
+    }
+  };
 
   const handleApplyCoupon = async () => {
     if (!couponInput.trim()) return;
@@ -65,13 +139,22 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
   };
 
   const getFinalPrice = () => {
-    if (!appliedCoupon) return product.price;
-    if (appliedCoupon.discountType === "percent") {
-      const discount = (product.price * appliedCoupon.discountValue) / 100;
-      return Math.max(0, product.price - discount);
-    } else {
-      return Math.max(0, product.price - appliedCoupon.discountValue);
+    let price = product.price;
+    // 1. Coupon Discount
+    if (appliedCoupon) {
+      if (appliedCoupon.discountType === "percent") {
+        const discount = (price * appliedCoupon.discountValue) / 100;
+        price = Math.max(0, price - discount);
+      } else {
+        price = Math.max(0, price - appliedCoupon.discountValue);
+      }
     }
+    // 2. Loyalty Tier Discount
+    if (tierDiscountPercent > 0) {
+      const tierDiscount = (price * tierDiscountPercent) / 100;
+      price = Math.max(0, price - tierDiscount);
+    }
+    return price;
   };
 
   const getWhatsAppMessageUrl = () => {
@@ -405,9 +488,25 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
           <div className="flex items-center justify-between pt-4 border-t border-zinc-100 dark:border-zinc-700/50">
             <div>
               <span className="text-[10px] text-zinc-400 dark:text-zinc-500 block">FİYAT</span>
-              <span className="font-mono font-extrabold text-zinc-800 dark:text-white text-lg">
-                {product.price.toFixed(2)} TL
-              </span>
+              {tierDiscountPercent > 0 ? (
+                <div className="flex flex-col">
+                  <span className="text-[10px] line-through text-zinc-400 dark:text-zinc-500 leading-none mb-0.5">
+                    {product.price.toFixed(2)} TL
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-mono font-black text-indigo-600 dark:text-indigo-400 text-lg leading-none">
+                      {(product.price * (1 - tierDiscountPercent / 100)).toFixed(2)} TL
+                    </span>
+                    <span className="px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-extrabold text-[8px] rounded-md border border-indigo-150 dark:border-indigo-900 leading-none" title={`${loyaltyTier} Üye İndirimi`}>
+                      -%{tierDiscountPercent}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <span className="font-mono font-extrabold text-zinc-800 dark:text-white text-lg">
+                  {product.price.toFixed(2)} TL
+                </span>
+              )}
             </div>
             <button
               id={`details-btn-${product.id}`}
@@ -485,9 +584,25 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
                   <div className="flex items-center justify-between mb-4">
                     <div>
                       <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-semibold block">SATIŞ FİYATI</span>
-                      <span className="font-mono font-extrabold text-2xl text-zinc-800 dark:text-white">
-                        {product.price.toFixed(2)} TL
-                      </span>
+                      {tierDiscountPercent > 0 ? (
+                        <div className="flex flex-col">
+                          <span className="text-xs line-through text-zinc-400 dark:text-zinc-500 leading-none mb-0.5">
+                            {product.price.toFixed(2)} TL
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-black text-2xl text-indigo-600 dark:text-indigo-400 leading-none">
+                              {(product.price * (1 - tierDiscountPercent / 100)).toFixed(2)} TL
+                            </span>
+                            <span className="px-1.5 py-0.5 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 font-extrabold text-[9px] rounded-md border border-indigo-150 dark:border-indigo-900 leading-none" title={`${loyaltyTier} Üye İndirimi`}>
+                              -%{tierDiscountPercent}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="font-mono font-extrabold text-2xl text-zinc-800 dark:text-white">
+                          {product.price.toFixed(2)} TL
+                        </span>
+                      )}
                     </div>
                     <div>
                       <span className="text-[10px] text-zinc-400 uppercase tracking-widest font-semibold block text-right">STOK DURUMU</span>
@@ -504,21 +619,49 @@ export default function ProductCard({ product, currentUserId, currentUserEmail }
                         href={product.itemSatisUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-sans font-extrabold py-3.5 px-4 rounded-2xl transition shadow-lg shadow-orange-500/10 text-sm outline-none cursor-pointer flex items-center justify-center gap-2"
+                        className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-sans font-extrabold py-3 px-4 rounded-2xl transition shadow-lg shadow-orange-500/10 text-xs outline-none cursor-pointer flex items-center justify-center gap-2"
                       >
                         <ShoppingBag className="w-4 h-4" />
                         ItemSatış'tan Güvenle Satın Al
                       </a>
                     )}
 
-                    {product.stockStatus === "var" && (
+                    {product.stockStatus === "var" ? (
+                      <>
+                        <button
+                          id={`pay-papara-btn-${product.id}`}
+                          onClick={() => setPaparaStep("name_input")}
+                          className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-sans font-extrabold py-3 px-4 rounded-2xl transition shadow-lg shadow-indigo-500/10 text-xs outline-none cursor-pointer flex items-center justify-center gap-2"
+                        >
+                          <Sparkles className="w-4 h-4 text-yellow-300" />
+                          Papara & IBAN ile Anında Öde
+                        </button>
+
+                        <button
+                          id={`toggle-price-alert-${product.id}`}
+                          onClick={() => handleToggleAlert("price")}
+                          className={`w-full font-sans font-bold py-2.5 px-4 rounded-2xl transition border text-[11px] outline-none cursor-pointer flex items-center justify-center gap-1.5 ${
+                            activePriceAlert
+                              ? "bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-950/20 dark:hover:bg-indigo-900/30 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900"
+                              : "bg-zinc-50 hover:bg-zinc-100 text-zinc-600 dark:bg-zinc-900/40 dark:hover:bg-zinc-800/40 dark:text-zinc-400 border-zinc-200 dark:border-zinc-800"
+                          }`}
+                        >
+                          <Bell className={`w-3.5 h-3.5 ${activePriceAlert ? "animate-pulse" : ""}`} />
+                          {activePriceAlert ? "İndirim Alarmı Aktif (Kapat)" : "Fiyatı Düşünce Haber Ver"}
+                        </button>
+                      </>
+                    ) : (
                       <button
-                        id={`pay-papara-btn-${product.id}`}
-                        onClick={() => setPaparaStep("name_input")}
-                        className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-sans font-extrabold py-3.5 px-4 rounded-2xl transition shadow-lg shadow-indigo-500/10 text-sm outline-none cursor-pointer flex items-center justify-center gap-2"
+                        id={`toggle-stock-alert-${product.id}`}
+                        onClick={() => handleToggleAlert("stock")}
+                        className={`w-full font-sans font-bold py-3 px-4 rounded-2xl transition border text-xs outline-none cursor-pointer flex items-center justify-center gap-2 ${
+                          activeStockAlert
+                            ? "bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-950/20 dark:hover:bg-emerald-900/30 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900"
+                            : "bg-zinc-100 hover:bg-zinc-200 text-zinc-700 dark:bg-zinc-900 dark:hover:bg-zinc-800 dark:text-zinc-300 border-zinc-200 dark:border-zinc-800"
+                        }`}
                       >
-                        <Sparkles className="w-4 h-4 text-yellow-300" />
-                        Papara & IBAN ile Anında Öde
+                        <BellRing className={`w-4 h-4 ${activeStockAlert ? "animate-bounce" : ""}`} />
+                        {activeStockAlert ? "Stok Alarmı Aktif (Kapat)" : "Stok Gelince Haber Ver"}
                       </button>
                     )}
                   </div>

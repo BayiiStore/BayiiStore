@@ -45,6 +45,9 @@ export interface Claim {
   customerName?: string; // Bank account name
   isConfirmedByUser?: boolean;
   confirmedAt?: number;
+  originalPrice?: number;
+  paidPrice?: number;
+  couponCode?: string | null;
 }
 
 export interface UserProfile {
@@ -104,4 +107,33 @@ export interface Coupon {
   active: boolean;
   createdAt: number;
 }
+
+export interface Alert {
+  id: string;
+  userId: string;
+  productId: string;
+  type: 'stock' | 'price';
+  targetPrice?: number;
+  createdAt: number;
+  active: boolean;
+}
+
+export interface SupportChatSession {
+  userId: string;
+  userEmail: string;
+  userName: string;
+  lastMessage: string;
+  lastActive: number;
+  unreadByAdmin: boolean;
+  unreadByUser: boolean;
+}
+
+export interface SupportChatMessage {
+  id: string;
+  senderId: string;
+  senderEmail: string;
+  content: string;
+  createdAt: number;
+}
+
 
